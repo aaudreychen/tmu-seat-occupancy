@@ -1,0 +1,27 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+
+const app = express();
+app.use(cors()); // This allows your frontend to talk to this server
+app.use(express.json());
+
+// Connect to your local MongoDB
+mongoose.connect('mongodb://localhost:27017/tmu_occupancy');
+
+const SeatSchema = new mongoose.Schema({
+  room_id: String,
+  occupied: Number,
+  co2_ppm: Number,
+  temperature_c: Number
+});
+
+const Seat = mongoose.model('Seat', SeatSchema);
+
+// The API endpoint your frontend is fetching
+app.get('/api/seats', async (req, res) => {
+  const seats = await Seat.find();
+  res.json(seats);
+});
+
+app.listen(5000, () => console.log('Backend running on port 5000'));
