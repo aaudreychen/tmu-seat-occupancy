@@ -12,6 +12,7 @@ from sklearn.pipeline import Pipeline
 # Pipeline imports 
 from pipeline.transmission_pipeline import validate_update, process_update, check_fallback, get_room, tracked_rooms_count
 import threading, time
+from db_send_pipeline_mongo import run_sender as run_db_sender
 
 
 # ----------------------
@@ -144,7 +145,7 @@ def occupancy_update():
         return jsonify({"error": err}), 400
 
     try:
-        result = process_update(data)  # your pipeline expects (data, db)
+        result = process_update(data) 
     except Exception as e:
         return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
 
@@ -159,9 +160,30 @@ def fallback_monitor():
         check_fallback()
         time.sleep(1)
 
+def start_sender_if_enabled():
+    """
+    Optional: start MongoDB sender inside the Flask process.
+    Controlled by env var AUTO_START_SENDER=true
+    """
+    flag = os.getenv("AUTO_START_SENDER", "false").lower()
+    if flag == "true":
+        t = threading.Thread(target=run_db_sender, daemon=True)
+        t.start()
+        print("AUTO_START_SENDER enabled: sender thread started")
+    else:
+        print("AUTO_START_SENDER disabled: sender not started")
+
+
 
 if __name__ == "__main__":
+    # Start fallback monitor thread
     t = threading.Thread(target=fallback_monitor, daemon=True)
     t.start()
+
+    # Optional: auto-start the DB sender
+    start_sender_if_enabled()
+
+    # IMPORTANT: use_reloader=False prevents Flask from starting twice (which would start sender twice)
     app.run(host="127.0.0.1", port=5000, debug=True, use_reloader=False, threaded=True)
+
 
