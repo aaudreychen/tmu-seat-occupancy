@@ -9,6 +9,7 @@ db_send_pipeline_mongodb.py - Continuous Transmission Sender for MongoDB (Dynami
 
 """
 
+
 import os
 import time
 import requests
@@ -60,8 +61,8 @@ def normalize_timestamp(ts):
 
 def objectid_to_sequence(oid: ObjectId) -> int:
     """
-    Create a stable numeric sequence_id from MongoDB ObjectId.
-    This helps prevent sequence reset issues after restarting the sender/pipeline.
+    Stable monotonic sequence_id derived from MongoDB ObjectId.
+    This prevents sequence reset problems across restarts.
     """
     ts_ms = int(oid.generation_time.timestamp() * 1000)
     tail = int.from_bytes(oid.binary[-3:], "big")
@@ -69,6 +70,7 @@ def objectid_to_sequence(oid: ObjectId) -> int:
 
 
 def ensure_sent_field(collection):
+    # Add sent=False to any docs missing the field
     collection.update_many(
         {"sent": {"$exists": False}},
         {"$set": {"sent": False}}
@@ -76,9 +78,6 @@ def ensure_sent_field(collection):
 
 
 def fetch_unsent_batch(collection):
-    """
-    Fetch at most BATCH_LIMIT unsent docs sorted by _id (approx insertion order).
-    """
     return list(
         collection.find({"sent": False})
         .sort("_id", 1)
@@ -86,8 +85,20 @@ def fetch_unsent_batch(collection):
     )
 
 
-def mark_sent(collection, doc_id):
-    collection.update_one({"_id": doc_id}, {"$set": {"sent": True}})
+def update_doc_status(collection, doc_id, *, sent=None, validated=None, reason=None):
+    """
+    Updates status fields on the RAW document.
+    - validated is only set after processing; otherwise remains missing.
+    """
+    update = {}
+    if sent is not None:
+        update["sent"] = sent
+    if validated is not None:
+        update["validated"] = validated
+    if reason is not None:
+        update["validation_reason"] = reason
+    if update:
+        collection.update_one({"_id": doc_id}, {"$set": update})
 
 
 def build_payload(doc):
@@ -109,10 +120,12 @@ def build_payload(doc):
 
 def post_to_pipeline(payload):
     """
-    Policy A:
-    - If HTTP 200, mark sent (even warnings like duplicate/out-of-order).
-    - Otherwise do not mark sent.
-    Returns: (mark_ok: bool, http_code: int, message: str)
+    Returns (ok_http_200: bool, http_code: int, kind: str, message: str)
+
+    kind:
+      - "accepted" -> pipeline accepted update
+      - "warning"  -> pipeline ignored it (duplicate/out-of-order)
+      - "error"    -> pipeline rejected (400/500) or request failed
     """
     try:
         r = requests.post(PIPELINE_URL, json=payload, timeout=10)
@@ -123,13 +136,26 @@ def post_to_pipeline(payload):
         except Exception:
             data = {}
 
-        msg = data.get("status") or data.get("warning") or data.get("error") or ""
         if code == 200:
-            return True, code, msg
-        return False, code, msg
+            if isinstance(data, dict) and "status" in data:
+                # success
+                msg = data.get("message", "Update processed")
+                return True, code, "accepted", f"{msg} ({data.get('status')})"
+            if isinstance(data, dict) and "warning" in data:
+                return True, code, "warning", str(data.get("warning"))
+            # HTTP 200 but unexpected
+            return True, code, "warning", "HTTP 200 but missing status/warning"
+        else:
+            msg = ""
+            if isinstance(data, dict):
+                msg = str(data.get("error", "")) or str(data.get("message", ""))
+            if not msg:
+                msg = f"HTTP {code}"
+            return False, code, "error", msg
 
     except Exception as e:
-        return False, 0, str(e)
+        return False, 0, "error", str(e)
+
 
 
 def get_dynamic_collections(db):
@@ -144,22 +170,17 @@ def get_dynamic_collections(db):
 
 
 def process_collection_batch(db, collection_name, next_allowed):
-    """
-    Process up to BATCH_LIMIT unsent docs from one collection.
-    Sends ASAP across rooms, enforcing MIN_INTERVAL_PER_ROOM per room.
-    Returns summary dict.
-    """
     collection = db[collection_name]
     ensure_sent_field(collection)
 
     docs = fetch_unsent_batch(collection)
     if not docs:
-        return None  # nothing to report
+        return None
 
     print(f"{collection_name}: Found {len(docs)} unsent documents (batch)")
 
     sent_count = 0
-    fail_count = 0
+    failed_count = 0
     skipped_count = 0
 
     # Bucket docs by (building_id, room_id) so we can round-robin across rooms
@@ -167,15 +188,21 @@ def process_collection_batch(db, collection_name, next_allowed):
     for doc in docs:
         payload = build_payload(doc)
         if payload is None:
-            # Missing required fields; mark sent so we don't retry forever
-            mark_sent(collection, doc["_id"])
+            # Missing required raw fields; don't retry forever
+            update_doc_status(
+                collection,
+                doc["_id"],
+                sent=True,
+                validated=False,
+                reason="Missing building_id or room_id in raw document",
+            )
             skipped_count += 1
             continue
 
         room_key = (payload["building_id"], payload["room_id"])
         buckets.setdefault(room_key, []).append((doc, payload))
 
-    # Round-robin: keep sending any eligible room "now"
+    # Round-robin: send any eligible room "now"
     while buckets:
         now = time.time()
         sent_any = False
@@ -191,34 +218,38 @@ def process_collection_batch(db, collection_name, next_allowed):
                 continue
 
             doc, payload = queue.pop(0)
+            ok200, code, kind, msg = post_to_pipeline(payload)
 
-            mark_ok, code, msg = post_to_pipeline(payload)
-
-            if mark_ok:
-                mark_sent(collection, doc["_id"])
-                sent_count += 1
+            if ok200:
+                # Mark delivery done either way to avoid infinite retries
+                if kind == "accepted":
+                    update_doc_status(collection, doc["_id"], sent=True, validated=True, reason=msg)
+                    sent_count += 1
+                else:
+                    # warning: duplicate/out-of-order or other ignored case
+                    update_doc_status(collection, doc["_id"], sent=True, validated=False, reason=msg)
+                    sent_count += 1  # still counts as "processed/sent"
             else:
-                fail_count += 1
+                failed_count += 1
                 print(
                     f"  FAILED {payload['building_id']}/{payload['room_id']} "
                     f"(HTTP {code}) -> {msg}"
                 )
-                # Stop processing this collection for this scan if pipeline is failing
+                # Stop this collection for this scan if backend is failing
                 buckets.clear()
                 break
 
-            # Enforce per-room minimum interval
             next_allowed[room_key] = time.time() + MIN_INTERVAL_PER_ROOM
             sent_any = True
 
         if not sent_any:
-            # No room was eligible right now; stop and let the outer loop poll again
+            # No room is eligible right now; let polling loop continue later
             break
 
     return {
         "collection": collection_name,
         "sent": sent_count,
-        "failed": fail_count,
+        "failed": failed_count,
         "skipped": skipped_count,
     }
 
@@ -232,20 +263,16 @@ def run_sender():
         return
 
     db, client = get_db()
-    print("=" * 60)
 
-    
-    '''
-    print("  MONGODB CONTINUOUS SENDER - Dynamic Collections")
-    print("=" * 60)
-    print(f"  Database   : {DB_NAME}")
-    print(f"  Pipeline   : {PIPELINE_URL}")
-    print(f"  Poll       : every {POLL_INTERVAL} seconds")
-    print(f"  Min/room   : {MIN_INTERVAL_PER_ROOM} seconds between sends per room")
-    print(f"  Batch limit: {BATCH_LIMIT} docs per collection per scan")
-    print("=" * 60)
-    '''
-    
+    ''' print("=" * 60)
+        print("  MONGODB CONTINUOUS SENDER - Dynamic Collections")
+        print("=" * 60)
+        print(f"  Database   : {DB_NAME}")
+        print(f"  Pipeline   : {PIPELINE_URL}")
+        print(f"  Poll       : every {POLL_INTERVAL} seconds")
+        print(f"  Min/room   : {MIN_INTERVAL_PER_ROOM} seconds between sends per room")
+        print(f"  Batch limit: {BATCH_LIMIT} docs per collection per scan")
+        print("=" * 60)'''
 
     # next_allowed send time per (building_id, room_id)
     next_allowed = {}
@@ -265,11 +292,10 @@ def run_sender():
                 failed = summary["failed"]
                 skipped = summary["skipped"]
 
-                # Batch summary line
                 if failed > 0:
-                    print(f"{cname}: batch summary -> sent={sent}, failed={failed}, skipped={skipped}")
+                    print(f"{cname}: batch summary -> processed={sent}, failed={failed}, skipped={skipped}")
                 else:
-                    print(f"{cname}: batch summary -> sent={sent}, skipped={skipped}")
+                    print(f"{cname}: batch summary -> processed={sent}, skipped={skipped}")
 
             time.sleep(POLL_INTERVAL if not did_work else POLL_INTERVAL)
 
