@@ -47,7 +47,7 @@ def availability(collection_name):
         target_date = request.args.get('date') 
         target_time = request.args.get('time') 
         target_floor = request.args.get('floor') 
-        people = request.args.get('people') # New capacity filter
+        people = request.args.get('people')
 
         df = train_model(collection_name)
         if df is None or df.empty: return jsonify([])
