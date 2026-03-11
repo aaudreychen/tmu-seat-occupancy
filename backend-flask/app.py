@@ -1,15 +1,13 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from pymongo import MongoClient
+from pymongo.server_api import ServerApi
 from dotenv import load_dotenv
 import os
-import pandas as pd
-from datetime import datetime
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
+import threading
+import time
 
-# Pipeline imports
+# Pipeline imports (your pipeline section — keep these)
 from pipeline.transmission_pipeline import (
     validate_update,
     process_update,
@@ -17,133 +15,71 @@ from pipeline.transmission_pipeline import (
     get_room,
     tracked_rooms_count,
 )
-
-import threading
-import time
 from db_send_pipeline_mongo import run_sender as run_db_sender
 
 # ----------------------
 # Setup
 # ----------------------
 load_dotenv()
+MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    raise RuntimeError("MONGO_URI not set in .env")
+
 app = Flask(__name__)
 CORS(app)
 
-mongo_uri = os.getenv("MONGO_URI")
-if not mongo_uri:
-    raise RuntimeError("MONGO_URI is not set in .env")
-
-client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
-client.server_info()  # force real connection now (fails fast if wrong)
+client = MongoClient(MONGO_URI, server_api=ServerApi("1"))
 db = client["OccupancyData"]
 
 print("Connected to MongoDB Atlas!")
 
 # ----------------------
-# Model training
-# ----------------------
-def train_model(collection_name):
-    if collection_name not in db.list_collection_names():
-        return None
-
-    collection = db[collection_name]
-
-    # IMPORTANT: only train/predict on validated records
-    data = list(collection.find({"validated": True}, {"_id": 0}))
-    if not data:
-        return None
-
-    df = pd.DataFrame(data)
-
-    required = [
-        "temperature_c",
-        "co2_ppm",
-        "humidity_ratio",
-        "light_lux",
-        "relative_humidity",
-        "occupied",
-    ]
-
-    if not all(col in df.columns for col in required):
-        return None
-
-    for col in required:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    df = df.dropna(subset=required)
-
-    X = df[required[:-1]]
-    y = df["occupied"]
-
-    if len(set(y)) < 2:
-        df["predicted"] = y
-        return df
-
-    model = Pipeline([
-        ("scaler", StandardScaler()),
-        ("clf", LogisticRegression())
-    ])
-    model.fit(X, y)
-    df["predicted"] = model.predict(X)
-
-    return df
-
-# ----------------------
-# Existing endpoint (used by frontend)
+# Availability endpoint (updated — no ML, direct DB query)
 # ----------------------
 @app.route("/availability/<collection_name>")
 def availability(collection_name):
     try:
-        target_date = request.args.get("date")
-        target_time = request.args.get("time")
-        target_floor = request.args.get("floor")
-        people = request.args.get("people")
+        collection = db[collection_name]
 
-        df = train_model(collection_name)
-        if df is None or df.empty:
-            return jsonify([])
+        # Get query params
+        target_date = request.args.get("date")   # YYYY-MM-DD
+        target_time = request.args.get("time")   # HH:MM
+        target_floor = request.args.get("floor") # "F1", "F2", etc.
 
+        query = {}
+
+        # Filter by date using regex on timestamp_iso
         if target_date:
-            df = df[df["date_str"] == target_date]
+            query["timestamp_iso"] = {"$regex": f"^{target_date}"}
 
-        if target_floor:
-            df = df[df["floor_id"] == f"F{target_floor}"]
+        # Only return validated documents
+        query["validated"] = True
 
-        if people:
-            df["capacity"] = pd.to_numeric(df["capacity"], errors="coerce")
-            df = df[df["capacity"] >= int(people)]
+        docs = list(collection.find(query, {"_id": 0}))
 
-        if target_time and not df.empty:
-            sel_t = datetime.strptime(target_time, "%I:%M %p").time()
+        results = []
 
-            def in_window(row_t_str):
-                try:
-                    row_t = datetime.strptime(row_t_str, "%H:%M").time()
-                    return sel_t.hour == row_t.hour and sel_t.minute <= row_t.minute < (sel_t.minute + 30)
-                except Exception:
-                    return False
+        for doc in docs:
+            # Floor filter
+            if target_floor and doc.get("floor_id") != target_floor:
+                continue
 
-            df = df[df["time_str"].apply(in_window)]
+            # Time filter (matches substring of timestamp_iso)
+            if target_time and target_time not in doc.get("timestamp_iso", ""):
+                continue
 
-        formatted = []
-        for _, row in df.iterrows():
-            raw_t = row.get("time_str")
-            disp_t = (
-                datetime.strptime(raw_t, "%H:%M").strftime("%I:%M %p").lstrip("0")
-                if raw_t else "N/A"
-            )
+            # Convert booking_duration to minutes for frontend
+            if "booking_duration" in doc and doc["booking_duration"] is not None:
+                doc["duration"] = int(doc["booking_duration"] * 60)
+            else:
+                doc["duration"] = None
 
-            formatted.append({
-                "room_id": row.get("room_id"),
-                "floor_id": row.get("floor_id"),
-                "capacity": row.get("capacity"),
-                "time": disp_t,
-                "predicted": int(row.get("predicted", 0))
-            })
+            results.append(doc)
 
-        return jsonify(formatted)
+        return jsonify(results)
 
     except Exception as e:
+        print("Error:", e)
         return jsonify({"error": str(e)}), 500
 
 
@@ -184,7 +120,7 @@ def occupancy_update():
     except Exception as e:
         return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
 
-    # duplicate/out-of-order should be a warning (HTTP 200), not a hard failure
+    # Duplicate/out-of-order should be a warning (HTTP 200), not a hard failure
     if isinstance(result, dict) and "error" in result:
         return jsonify({"warning": result["error"]}), 200
 
@@ -192,7 +128,15 @@ def occupancy_update():
 
 
 # ----------------------
-# Background fallback monitor
+# Home route
+# ----------------------
+@app.route("/")
+def home():
+    return "Backend Running"
+
+
+# ----------------------
+# Background fallback monitor (your pipeline section)
 # ----------------------
 def fallback_monitor():
     while True:
@@ -204,10 +148,6 @@ def fallback_monitor():
 # Optional auto-start sender inside Flask process
 # ----------------------
 def start_sender_if_enabled():
-    """
-    Optional: start MongoDB sender inside the Flask process.
-    Controlled by env var AUTO_START_SENDER=true
-    """
     flag = os.getenv("AUTO_START_SENDER", "false").lower()
     if flag == "true":
         t = threading.Thread(target=run_db_sender, daemon=True)
@@ -228,5 +168,5 @@ if __name__ == "__main__":
     # Optional: auto-start the DB sender
     start_sender_if_enabled()
 
-    # use_reloader=False prevents Flask from starting twice (which would start sender twice)
+    # use_reloader=False prevents Flask from starting twice
     app.run(host="127.0.0.1", port=5000, debug=True, use_reloader=False, threaded=True)
