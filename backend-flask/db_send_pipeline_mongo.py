@@ -140,7 +140,7 @@ def post_to_pipeline(payload):
             if isinstance(data, dict) and "status" in data:
                 # success
                 msg = data.get("message", "Update processed")
-                return True, code, "accepted", f"{msg} ({data.get('status')})"
+                return True, code, "accepted", f"{msg})"
             if isinstance(data, dict) and "warning" in data:
                 return True, code, "warning", str(data.get("warning"))
             # HTTP 200 but unexpected
