@@ -47,7 +47,7 @@ const ALL_WELLNESS_TIPS = [
   { emoji: "☀️", title: "Get Natural Light When Possible", body: "Natural light improves alertness and mood. When choosing a study spot, prefer seats near windows or well-lit areas over dim corners." },
 ];
 
-const TIPS_PER_PAGE = 12;
+const TIPS_PER_PAGE = 5;
 
 function shuffleArray<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -186,25 +186,27 @@ export default function App() {
   }, [data, minCapacity, suggestedFloor]);
 
   // Re-sort suggestedRooms by historical vacancy likelihood once insights are loaded.
-  // Rooms with a lower occupied percentage historically are ranked first -- most likely
-  // to be empty. Capacity is used as a tiebreaker when two rooms share the same pct.
+  // The backend returns pct as occupancy rate (0-100), so vacancy = 100 - pct.
+  // Higher vacancy = more likely to be empty = ranked first.
+  // Capacity is used as a tiebreaker when two rooms share the same vacancy pct.
   // Falls back to capacity-only ordering while insights are still loading.
   const rankedRooms = useMemo(() => {
     if (!suggestedRooms.length) return suggestedRooms;
     return [...suggestedRooms].sort((a, b) => {
       const ia = roomInsights[a.room_id];
       const ib = roomInsights[b.room_id];
-      const pctA = ia?.pct ?? null;
-      const pctB = ib?.pct ?? null;
+      // Convert occupancy pct to vacancy pct so higher = better
+      const vacA = ia?.pct != null ? 100 - ia.pct : null;
+      const vacB = ib?.pct != null ? 100 - ib.pct : null;
       // Rooms with insight data rank before rooms without
-      if (pctA !== null && pctB !== null) {
-        // Lower occupied pct = more likely to be empty = ranked first
-        if (pctA !== pctB) return pctA - pctB;
+      if (vacA !== null && vacB !== null) {
+        // Higher vacancy pct = more likely to be empty = ranked first
+        if (vacA !== vacB) return vacB - vacA;
         // Tiebreaker: larger capacity first
         return (b.capacity || 0) - (a.capacity || 0);
       }
-      if (pctA !== null) return -1;
-      if (pctB !== null) return 1;
+      if (vacA !== null) return -1;
+      if (vacB !== null) return 1;
       // No insight data for either -- fall back to capacity
       return (b.capacity || 0) - (a.capacity || 0);
     });
@@ -386,14 +388,27 @@ export default function App() {
       <h1 style={{ marginBottom: "8px" }}>Study Wellness Tips</h1>
       <p style={{ color: "#6B7280", marginBottom: "6px" }}>Finding a seat is only half the battle.</p>
       <p style={{ color: "#9CA3AF", fontSize: "13px", marginBottom: "28px" }}>Navigate away and come back for a fresh set of tips.</p>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
-        {wellnessTips.map((tip, i) => (
-          <div key={i} style={{ background: "white", borderRadius: "14px", padding: "22px", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "8px" }}>
-            <div style={{ fontSize: "28px" }}>{tip.emoji}</div>
-            <div style={{ fontWeight: 700, fontSize: "15px", color: "#111827" }}>{tip.title}</div>
-            <div style={{ fontSize: "13px", color: "#6B7280", lineHeight: "1.6" }}>{tip.body}</div>
+      <div style={{ maxWidth: "780px", margin: "0 auto" }}>
+        {/* First 4 cards in a 2x2 grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+          {wellnessTips.slice(0, 4).map((tip, i) => (
+            <div key={i} style={{ background: "white", borderRadius: "14px", padding: "24px", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ fontSize: "30px" }}>{tip.emoji}</div>
+              <div style={{ fontWeight: 700, fontSize: "15px", color: "#111827" }}>{tip.title}</div>
+              <div style={{ fontSize: "13px", color: "#6B7280", lineHeight: "1.7" }}>{tip.body}</div>
+            </div>
+          ))}
+        </div>
+        {/* 5th card centered on its own row */}
+        {wellnessTips[4] && (
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <div style={{ background: "white", borderRadius: "14px", padding: "24px", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "10px", width: "calc(50% - 8px)" }}>
+              <div style={{ fontSize: "30px" }}>{wellnessTips[4].emoji}</div>
+              <div style={{ fontWeight: 700, fontSize: "15px", color: "#111827" }}>{wellnessTips[4].title}</div>
+              <div style={{ fontSize: "13px", color: "#6B7280", lineHeight: "1.7" }}>{wellnessTips[4].body}</div>
+            </div>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
