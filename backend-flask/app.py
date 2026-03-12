@@ -7,6 +7,7 @@ import os
 import pandas as pd
 import threading
 import time
+from datetime import datetime, timedelta
 
 # ML imports -- used by train_model when sensor columns are present
 from sklearn.linear_model import LogisticRegression
@@ -140,186 +141,142 @@ def train_model(collection_name):
 # Stores validated pipeline records in a long-term history collection.
 # This does NOT affect the main collections used by availability.
 # ---------------------------------------------------------------------------
-def log_historical_record(record):
+
+
+# ---------------------------------------------------------------------------
+# Collections to skip when querying building data
+# ---------------------------------------------------------------------------
+SKIP_COLLECTIONS = {"historical_logs", "room_occupancy", "OccupancyInfo"}
+
+
+def _building_collections():
+    """Return list of collection names that contain building occupancy data."""
+    return [c for c in db.list_collection_names() if c not in SKIP_COLLECTIONS]
+
+
+# ---------------------------------------------------------------------------
+# Date range endpoint
+# Returns the earliest and latest timestamp across all building collections
+# so the frontend can default the end date to real data, not today.
+# GET /trends/date-range
+# ---------------------------------------------------------------------------
+@app.route("/trends/date-range")
+def trends_date_range():
     try:
-        history_collection = db["historical_logs"]
-
-        history_doc = {
-            "building_id": record.get("building_id"),
-            "room_id": record.get("room_id"),
-            "floor_id": record.get("floor_id"),
-            "occupied": record.get("occupied"),
-            "booking_duration": record.get("booking_duration"),
-            "timestamp_iso": record.get("timestamp_iso"),
-            "validated": record.get("validated"),
-        }
-
-        history_collection.insert_one(history_doc)
-
-    except Exception as e:
-        print(f"[history_log] Failed to log record: {e}")
-
-
-# ---------------------------------------------------------------------------
-# Normalise a building_id string so lookups are robust regardless of how
-# the value was originally stored (with spaces, without, different case).
-# "Student Learning Center" -> "studentlearningcenter"
-# ---------------------------------------------------------------------------
-def _norm(s):
-    return (s or "").lower().replace(" ", "")
-
-
-# ---------------------------------------------------------------------------
-# Debug -- shows what is actually stored in historical_logs.
-# GET http://127.0.0.1:5000/debug/history
-# ---------------------------------------------------------------------------
-@app.route("/debug/history")
-def debug_history():
-    try:
-        col   = db["historical_logs"]
-        total = col.count_documents({})
-        bids  = col.distinct("building_id")
-        sample = list(col.find({}, {"_id": 0}).limit(3))
-        return jsonify({"total_docs": total, "building_ids": bids, "sample": sample}), 200
+        overall_earliest = None
+        overall_latest   = None
+        for cname in _building_collections():
+            col = db[cname]
+            latest_doc = col.find_one(
+                {"timestamp_iso": {"$exists": True, "$ne": None}},
+                {"_id": 0, "timestamp_iso": 1},
+                sort=[("timestamp_iso", -1)],
+            )
+            earliest_doc = col.find_one(
+                {"timestamp_iso": {"$exists": True, "$ne": None}},
+                {"_id": 0, "timestamp_iso": 1},
+                sort=[("timestamp_iso", 1)],
+            )
+            if latest_doc:
+                ts = latest_doc["timestamp_iso"][:10]
+                if overall_latest is None or ts > overall_latest:
+                    overall_latest = ts
+            if earliest_doc:
+                ts = earliest_doc["timestamp_iso"][:10]
+                if overall_earliest is None or ts < overall_earliest:
+                    overall_earliest = ts
+        return jsonify({"earliest": overall_earliest, "latest": overall_latest}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 # ---------------------------------------------------------------------------
-# Backfill -- copies all validated records from every building collection
-# into historical_logs in a background thread (returns immediately).
-#
-# GET /backfill        -- start
-# GET /backfill/status -- poll for progress
-# ---------------------------------------------------------------------------
-_backfill_status: dict = {
-    "running": False, "inserted": 0, "skipped": 0, "done": False, "error": None
-}
-
-
-def _run_backfill():
-    global _backfill_status
-    _backfill_status = {"running": True, "inserted": 0, "skipped": 0, "done": False, "error": None}
-    try:
-        hcol = db["historical_logs"]
-        hcol.create_index(
-            [("building_id", 1), ("room_id", 1), ("timestamp_iso", 1)],
-            unique=True, background=True,
-        )
-        total_in = total_sk = 0
-        SKIP  = {"historical_logs"}
-        BATCH = 500
-
-        for cname in db.list_collection_names():
-            if cname in SKIP:
-                continue
-            docs = list(db[cname].find(
-                {"validated": {"$in": [True, 1, "true"]}}, {"_id": 0}
-            ))
-            if not docs:
-                continue
-
-            hdocs = [{
-                "building_id":      doc.get("building_id") or cname,
-                "room_id":          doc.get("room_id"),
-                "floor_id":         doc.get("floor_id"),
-                "occupied":         doc.get("occupied"),
-                "booking_duration": doc.get("booking_duration"),
-                "timestamp_iso":    doc.get("timestamp_iso"),
-                "validated":        True,
-            } for doc in docs]
-
-            cin = csk = 0
-            for i in range(0, len(hdocs), BATCH):
-                try:
-                    r = hcol.insert_many(hdocs[i:i+BATCH], ordered=False)
-                    cin += len(r.inserted_ids)
-                except Exception as be:
-                    d = getattr(be, "details", {})
-                    cin += d.get("nInserted", 0)
-                    csk += len(d.get("writeErrors", []))
-
-            total_in += cin
-            total_sk += csk
-            print(f"[backfill] {cname}: +{cin} inserted, {csk} skipped")
-
-        _backfill_status.update({
-            "running": False, "inserted": total_in, "skipped": total_sk, "done": True
-        })
-        print(f"[backfill] done — inserted={total_in}, skipped={total_sk}")
-
-    except Exception as e:
-        _backfill_status.update({"running": False, "done": True, "error": str(e)})
-        print(f"[backfill] Error: {e}")
-
-
-@app.route("/backfill")
-def backfill():
-    if _backfill_status["running"]:
-        return jsonify({"message": "Already running", **_backfill_status}), 200
-    threading.Thread(target=_run_backfill, daemon=True).start()
-    return jsonify({"message": "Backfill started. Poll /backfill/status for progress."}), 202
-
-
-@app.route("/backfill/status")
-def backfill_status():
-    return jsonify(_backfill_status), 200
-
-
-# ---------------------------------------------------------------------------
 # Trends endpoint
 #
-# Returns monthly aggregates from historical_logs.
-# NO date cutoff -- all data is returned so older datasets are not hidden.
-# Building filter matches normalised building_id to handle spacing/case
-# differences between how values were stored vs what the frontend sends.
+# Queries the building collections DIRECTLY — no backfill, no intermediate
+# collection. Each building collection is queried in a parallel thread so
+# all buildings return at the same time.
+#
+# Query params:
+#   end_date -- YYYY-MM-DD (defaults to latest date in data)
+#   building -- collection name e.g. "StudentLearningCenter" (optional)
+#              if omitted, all buildings are aggregated together
 # ---------------------------------------------------------------------------
 @app.route("/trends")
 def trends():
     try:
-        hcol        = db["historical_logs"]
-        building_id = request.args.get("building")   # e.g. "StudentLearningCenter"
+        building_id  = request.args.get("building")
+        end_date_str = request.args.get("end_date")
 
-        # Fetch all validated docs (no date cutoff)
-        base_query = {"validated": {"$in": [True, 1, "true"]}}
-        docs = list(hcol.find(base_query, {"_id": 0}))
+        if end_date_str:
+            try:
+                end_dt = datetime.strptime(end_date_str, "%Y-%m-%d")
+            except ValueError:
+                end_dt = datetime.utcnow()
+        else:
+            end_dt = datetime.utcnow()
 
-        if not docs:
+        start_dt     = end_dt - timedelta(days=90)
+        cutoff_start = start_dt.strftime("%Y-%m-%dT00:00:00")
+        cutoff_end   = end_dt.strftime("%Y-%m-%dT23:59:59")
+
+        # Decide which collections to query
+        if building_id:
+            cnames = [building_id]
+        else:
+            cnames = _building_collections()
+
+        # Query each collection in parallel
+        all_docs = []
+        lock = threading.Lock()
+
+        def _query_collection(cname):
+            try:
+                docs = list(db[cname].find(
+                    {
+                        "validated":     {"$in": [True, 1, "true"]},
+                        "timestamp_iso": {"$gte": cutoff_start, "$lte": cutoff_end},
+                    },
+                    {"_id": 0, "occupied": 1, "booking_duration": 1, "timestamp_iso": 1}
+                ))
+                # Tag each doc with building name so we can filter later if needed
+                for doc in docs:
+                    doc["building_id"] = cname
+                with lock:
+                    all_docs.extend(docs)
+            except Exception as e:
+                print(f"[trends] Error querying {cname}: {e}")
+
+        threads = [threading.Thread(target=_query_collection, args=(c,)) for c in cnames]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        if not all_docs:
             return jsonify([])
 
-        df = pd.DataFrame(docs)
-        df["occupied"]         = pd.to_numeric(df["occupied"], errors="coerce")
-        df["booking_duration"] = pd.to_numeric(
-            df["booking_duration"] if "booking_duration" in df.columns
-            else pd.Series(dtype=float),
-            errors="coerce",
-        )
-        df["ts"]    = pd.to_datetime(df["timestamp_iso"], errors="coerce")
-        df          = df.dropna(subset=["ts", "occupied"])
+        df = pd.DataFrame(all_docs)
+        df["occupied"] = pd.to_numeric(df["occupied"], errors="coerce")
+        if "booking_duration" in df.columns:
+            df["booking_duration"] = pd.to_numeric(df["booking_duration"], errors="coerce")
+        else:
+            df["booking_duration"] = None
+
+        df["ts"] = pd.to_datetime(df["timestamp_iso"], errors="coerce")
+        df = df.dropna(subset=["ts", "occupied"])
+        df = df[(df["ts"] >= pd.Timestamp(start_dt)) & (df["ts"] <= pd.Timestamp(end_dt))]
 
         if df.empty:
             return jsonify([])
 
-        # Apply building filter using normalised comparison so
-        # "StudentLearningCenter" matches "Student Learning Center" etc.
-        if building_id:
-            target = _norm(building_id)
-            df["_bid_norm"] = df["building_id"].apply(_norm)
-            df = df[df["_bid_norm"] == target]
-            if df.empty:
-                return jsonify([])
-
         df["month"] = df["ts"].dt.to_period("M").astype(str)
-
         grouped = (
             df.groupby("month")
-            .agg(
-                avg_occupancy  = ("occupied",         "mean"),
-                total_records  = ("occupied",         "count"),
-                avg_duration_h = ("booking_duration", "mean"),
-            )
-            .reset_index()
-            .sort_values("month")
+            .agg(avg_occupancy=("occupied", "mean"),
+                 total_records=("occupied", "count"),
+                 avg_duration_h=("booking_duration", "mean"))
+            .reset_index().sort_values("month")
         )
 
         return jsonify([{
@@ -420,7 +377,6 @@ def occupancy_update():
 
     try:
         result = process_update(data)
-        log_historical_record(data)
     except Exception as e:
         return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
 
