@@ -185,7 +185,32 @@ export default function App() {
     }).sort((a, b) => (b.capacity || 0) - (a.capacity || 0));
   }, [data, minCapacity, suggestedFloor]);
 
-  // Fetch historical insights whenever we're on the suggested page and have rooms
+  // Re-sort suggestedRooms by historical vacancy likelihood once insights are loaded.
+  // Rooms with a lower occupied percentage historically are ranked first -- most likely
+  // to be empty. Capacity is used as a tiebreaker when two rooms share the same pct.
+  // Falls back to capacity-only ordering while insights are still loading.
+  const rankedRooms = useMemo(() => {
+    if (!suggestedRooms.length) return suggestedRooms;
+    return [...suggestedRooms].sort((a, b) => {
+      const ia = roomInsights[a.room_id];
+      const ib = roomInsights[b.room_id];
+      const pctA = ia?.pct ?? null;
+      const pctB = ib?.pct ?? null;
+      // Rooms with insight data rank before rooms without
+      if (pctA !== null && pctB !== null) {
+        // Lower occupied pct = more likely to be empty = ranked first
+        if (pctA !== pctB) return pctA - pctB;
+        // Tiebreaker: larger capacity first
+        return (b.capacity || 0) - (a.capacity || 0);
+      }
+      if (pctA !== null) return -1;
+      if (pctB !== null) return 1;
+      // No insight data for either -- fall back to capacity
+      return (b.capacity || 0) - (a.capacity || 0);
+    });
+  }, [suggestedRooms, roomInsights]);
+
+  // Fetch historical insights whenever we are on the suggested page and have rooms.
   // Using a stable roomKey string means this fires as soon as rooms are available,
   // including when first navigating to the page.
   const suggestedRoomKey = suggestedRooms.map((r: any) => r.room_id).join(",");
@@ -270,7 +295,7 @@ export default function App() {
   const SuggestedPage = () => (
     <div>
       <h1 style={{ marginBottom: "8px" }}>Suggested Rooms</h1>
-      <p style={{ color: "#6B7280", marginBottom: "24px" }}>Rooms that are currently free, sorted by capacity.</p>
+      <p style={{ color: "#6B7280", marginBottom: "24px" }}>Rooms that are currently free, ranked by how likely they are to stay empty at the selected time.</p>
       <div style={{ display: "flex", gap: "16px", marginBottom: "30px", alignItems: "flex-end", flexWrap: "wrap" }}>
         <div style={filterWrap}>
           <label style={labelStyle}>Building</label>
@@ -313,11 +338,11 @@ export default function App() {
           {showFloorPickerSuggested && (<FloorPicker selectedFloor={suggestedFloor || 0} onSelectFloor={(n) => { setSuggestedFloor(n === suggestedFloor ? null : n); setShowFloorPickerSuggested(false); }} onClose={() => setShowFloorPickerSuggested(false)} availableFloors={availableFloors} />)}
         </div>
       </div>
-      {loading ? <p>Loading...</p> : suggestedRooms.length === 0 ? (
+      {loading ? <p>Loading...</p> : rankedRooms.length === 0 ? (
         <div style={{ padding: "40px", textAlign: "center", background: "white", borderRadius: "12px", color: "#6B7280" }}>No available rooms match your criteria.</div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "16px" }}>
-          {suggestedRooms.map((row: any, i: number) => {
+          {rankedRooms.map((row: any, i: number) => {
             const insight = roomInsights[row.room_id];
             return (
               <div key={i} style={{ background: "white", borderRadius: "14px", padding: "20px", boxShadow: i === 0 ? "0 0 0 2px #16A34A, 0 4px 12px rgba(0,0,0,0.08)" : "0 2px 6px rgba(0,0,0,0.06)", position: "relative", display: "flex", flexDirection: "column" }}>
