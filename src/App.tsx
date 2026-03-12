@@ -47,7 +47,7 @@ const ALL_WELLNESS_TIPS = [
   { emoji: "☀️", title: "Get Natural Light When Possible", body: "Natural light improves alertness and mood. When choosing a study spot, prefer seats near windows or well-lit areas over dim corners." },
 ];
 
-const TIPS_PER_PAGE = 5;
+const TIPS_PER_PAGE = 6;
 
 function shuffleArray<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -388,27 +388,14 @@ export default function App() {
       <h1 style={{ marginBottom: "8px" }}>Study Wellness Tips</h1>
       <p style={{ color: "#6B7280", marginBottom: "6px" }}>Finding a seat is only half the battle.</p>
       <p style={{ color: "#9CA3AF", fontSize: "13px", marginBottom: "28px" }}>Navigate away and come back for a fresh set of tips.</p>
-      <div style={{ maxWidth: "780px", margin: "0 auto" }}>
-        {/* First 4 cards in a 2x2 grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
-          {wellnessTips.slice(0, 4).map((tip, i) => (
-            <div key={i} style={{ background: "white", borderRadius: "14px", padding: "24px", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ fontSize: "30px" }}>{tip.emoji}</div>
-              <div style={{ fontWeight: 700, fontSize: "15px", color: "#111827" }}>{tip.title}</div>
-              <div style={{ fontSize: "13px", color: "#6B7280", lineHeight: "1.7" }}>{tip.body}</div>
-            </div>
-          ))}
-        </div>
-        {/* 5th card centered on its own row */}
-        {wellnessTips[4] && (
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <div style={{ background: "white", borderRadius: "14px", padding: "24px", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "10px", width: "calc(50% - 8px)" }}>
-              <div style={{ fontSize: "30px" }}>{wellnessTips[4].emoji}</div>
-              <div style={{ fontWeight: 700, fontSize: "15px", color: "#111827" }}>{wellnessTips[4].title}</div>
-              <div style={{ fontSize: "13px", color: "#6B7280", lineHeight: "1.7" }}>{wellnessTips[4].body}</div>
-            </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+        {wellnessTips.map((tip, i) => (
+          <div key={i} style={{ background: "white", borderRadius: "14px", padding: "28px 32px", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ fontSize: "30px" }}>{tip.emoji}</div>
+            <div style={{ fontWeight: 700, fontSize: "15px", color: "#111827" }}>{tip.title}</div>
+            <div style={{ fontSize: "13px", color: "#6B7280", lineHeight: "1.7" }}>{tip.body}</div>
           </div>
-        )}
+        ))}
       </div>
     </div>
   );
