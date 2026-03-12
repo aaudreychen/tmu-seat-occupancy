@@ -292,6 +292,101 @@ def trends():
 
 
 # ---------------------------------------------------------------------------
+# Room insights endpoint
+#
+# For a given building + list of room_ids + hour, returns historical
+# occupancy stats so the frontend can show "usually empty at this time".
+#
+# GET /room-insights/<collection_name>
+#   hour     -- 0-23 (the hour to analyse, e.g. 9 for 9:00)
+#   day      -- 0-6  (weekday: 0=Mon … 6=Sun)
+#   rooms    -- comma-separated room_ids e.g. "R09,R11,R16"
+# ---------------------------------------------------------------------------
+@app.route("/room-insights/<collection_name>")
+def room_insights(collection_name):
+    try:
+        col      = db[collection_name]
+        hour     = int(request.args.get("hour",  9))
+        day      = int(request.args.get("day",   0))
+        rooms_qs = request.args.get("rooms", "")
+        room_ids = [r.strip() for r in rooms_qs.split(",") if r.strip()]
+
+        if not room_ids:
+            return jsonify({}), 200
+
+        # Anchor the 90-day window to the latest timestamp in this collection
+        # so it always covers real data regardless of when the server is running.
+        latest_doc = col.find_one(
+            {"timestamp_iso": {"$exists": True, "$ne": None}},
+            {"_id": 0, "timestamp_iso": 1},
+            sort=[("timestamp_iso", -1)],
+        )
+        if latest_doc:
+            end_dt = datetime.strptime(latest_doc["timestamp_iso"][:10], "%Y-%m-%d")
+        else:
+            end_dt = datetime.utcnow()
+        start_dt = end_dt - timedelta(days=90)
+        cutoff   = start_dt.strftime("%Y-%m-%dT00:00:00")
+
+        docs = list(col.find(
+            {
+                "validated":     {"$in": [True, 1, "true"]},
+                "room_id":       {"$in": room_ids},
+                "timestamp_iso": {"$gte": cutoff},
+            },
+            {"_id": 0, "room_id": 1, "occupied": 1, "timestamp_iso": 1}
+        ))
+
+        if not docs:
+            return jsonify({}), 200
+
+        df = pd.DataFrame(docs)
+        df["ts"]       = pd.to_datetime(df["timestamp_iso"], errors="coerce")
+        df["occupied"] = pd.to_numeric(df["occupied"], errors="coerce")
+        df = df.dropna(subset=["ts", "occupied"])
+
+        result = {}
+        for room_id, grp in df.groupby("room_id"):
+            # Records matching this weekday and hour (±1 hour window)
+            same_slot = grp[
+                (grp["ts"].dt.weekday == day) &
+                (grp["ts"].dt.hour.between(max(0, hour - 1), min(23, hour + 1)))
+            ]
+            if same_slot.empty:
+                result[room_id] = {"label": "No historical data", "pct": None}
+                continue
+
+            pct_occupied = same_slot["occupied"].mean()  # 0.0 – 1.0
+            total        = len(same_slot)
+
+            if pct_occupied < 0.20:
+                label = "Usually empty at this time"
+                color = "#15803D"
+            elif pct_occupied < 0.50:
+                label = "Often available at this time"
+                color = "#65A30D"
+            elif pct_occupied < 0.75:
+                label = "Sometimes busy at this time"
+                color = "#D97706"
+            else:
+                label = "Usually busy at this time"
+                color = "#DC2626"
+
+            result[room_id] = {
+                "label": label,
+                "color": color,
+                "pct":   round(float(pct_occupied) * 100, 1),
+                "samples": total,
+            }
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        print(f"[room-insights] Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
 # Availability endpoint
 #
 # Uses a direct MongoDB query -- the same approach that was confirmed working.
