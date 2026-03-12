@@ -86,6 +86,9 @@ export default function App() {
   const [minCapacity, setMinCapacity] = useState<number>(1);
   const [suggestedFloor, setSuggestedFloor] = useState<number | null>(null);
   const [showFloorPickerSuggested, setShowFloorPickerSuggested] = useState(false);
+  const [suggestedTime, setSuggestedTime] = useState<string>("09:00");
+  const [roomInsights, setRoomInsights] = useState<Record<string, { label: string; color: string; pct: number | null; samples?: number }>>({});
+  const [insightsLoading, setInsightsLoading] = useState(false);
   const [wellnessTips, setWellnessTips] = useState(() => shuffleArray(ALL_WELLNESS_TIPS).slice(0, TIPS_PER_PAGE));
 
   // History state
@@ -182,6 +185,22 @@ export default function App() {
     }).sort((a, b) => (b.capacity || 0) - (a.capacity || 0));
   }, [data, minCapacity, suggestedFloor]);
 
+  // Fetch historical insights whenever we're on the suggested page and have rooms
+  // Using a stable roomKey string means this fires as soon as rooms are available,
+  // including when first navigating to the page.
+  const suggestedRoomKey = suggestedRooms.map((r: any) => r.room_id).join(",");
+  useEffect(() => {
+    if (page !== "suggested" || !suggestedRoomKey) return;
+    const hour = parseInt(suggestedTime.split(":")[0], 10);
+    const day  = selectedDate.getDay() === 0 ? 6 : selectedDate.getDay() - 1;
+    setInsightsLoading(true);
+    fetch(`${API_URL}/room-insights/${building}?hour=${hour}&day=${day}&rooms=${encodeURIComponent(suggestedRoomKey)}`)
+      .then((r) => r.json())
+      .then((json) => setRoomInsights(typeof json === "object" ? json : {}))
+      .catch(() => setRoomInsights({}))
+      .finally(() => setInsightsLoading(false));
+  }, [page, building, suggestedTime, selectedDate, suggestedRoomKey]);
+
   const NavItem = ({ p, label, emoji }: { p: Page; label: string; emoji: string }) => (
     <button onClick={() => setPage(p)} style={{ background: page === p ? "#1F2937" : "transparent", border: "none", color: page === p ? "white" : "#9CA3AF", padding: "10px 14px", borderRadius: "8px", cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: page === p ? 700 : 400, display: "flex", alignItems: "center", gap: "10px", width: "100%", whiteSpace: "nowrap" }}>
       <span style={{ fontSize: "16px" }}>{emoji}</span>{label}
@@ -252,7 +271,7 @@ export default function App() {
     <div>
       <h1 style={{ marginBottom: "8px" }}>Suggested Rooms</h1>
       <p style={{ color: "#6B7280", marginBottom: "24px" }}>Rooms that are currently free, sorted by capacity.</p>
-      <div style={{ display: "flex", gap: "16px", marginBottom: "30px", alignItems: "flex-end", flexWrap: "nowrap" }}>
+      <div style={{ display: "flex", gap: "16px", marginBottom: "30px", alignItems: "flex-end", flexWrap: "wrap" }}>
         <div style={filterWrap}>
           <label style={labelStyle}>Building</label>
           <select value={building} onChange={(e) => { setSuggestedFloor(null); setBuilding(e.target.value); }} style={inputStyle}>
@@ -263,6 +282,24 @@ export default function App() {
           <label style={labelStyle}>Date</label>
           <button onClick={() => { setShowCalendar(!showCalendar); setShowFloorPickerSuggested(false); }} style={inputStyle}>{selectedDate.toDateString()}</button>
           {showCalendar && (<div style={{ position: "absolute", top: "100%", zIndex: 100 }}><Calendar selectedDate={selectedDate} onSelectDate={(d) => { setSelectedDate(d); setShowCalendar(false); }} onClose={() => setShowCalendar(false)} /></div>)}
+        </div>
+        <div style={filterWrap}>
+          <label style={labelStyle}>Time</label>
+          <select value={suggestedTime} onChange={(e) => setSuggestedTime(e.target.value)} style={inputStyle}>
+            {Array.from({ length: 29 }, (_, i) => {
+              const totalMins = 7 * 60 + i * 30;
+              const h = Math.floor(totalMins / 60).toString().padStart(2, "0");
+              const m = (totalMins % 60).toString().padStart(2, "0");
+              return `${h}:${m}`;
+            }).map((t) => (
+              <option key={t} value={t}>{(() => {
+                const [h, m] = t.split(":").map(Number);
+                const ampm = h < 12 ? "AM" : "PM";
+                const h12 = h % 12 || 12;
+                return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
+              })()}</option>
+            ))}
+          </select>
         </div>
         <div style={filterWrap}>
           <label style={labelStyle}>Min. Capacity</label>
@@ -280,21 +317,40 @@ export default function App() {
         <div style={{ padding: "40px", textAlign: "center", background: "white", borderRadius: "12px", color: "#6B7280" }}>No available rooms match your criteria.</div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "16px" }}>
-          {suggestedRooms.map((row, i) => (
-            <div key={i} style={{ background: "white", borderRadius: "14px", padding: "20px", boxShadow: i === 0 ? "0 0 0 2px #16A34A, 0 4px 12px rgba(0,0,0,0.08)" : "0 2px 6px rgba(0,0,0,0.06)", position: "relative", display: "flex", flexDirection: "column" }}>
-              {i === 0 && <div style={{ position: "absolute", top: "14px", right: "14px", background: "#DCFCE7", color: "#15803D", fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px" }}>Best Match</div>}
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-                <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#16A34A" }} />
-                <span style={{ fontWeight: 700, fontSize: "16px" }}>Room {row.room_id}</span>
+          {suggestedRooms.map((row: any, i: number) => {
+            const insight = roomInsights[row.room_id];
+            return (
+              <div key={i} style={{ background: "white", borderRadius: "14px", padding: "20px", boxShadow: i === 0 ? "0 0 0 2px #16A34A, 0 4px 12px rgba(0,0,0,0.08)" : "0 2px 6px rgba(0,0,0,0.06)", position: "relative", display: "flex", flexDirection: "column" }}>
+                {i === 0 && <div style={{ position: "absolute", top: "14px", right: "14px", background: "#DCFCE7", color: "#15803D", fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px" }}>Best Match</div>}
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+                  <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#16A34A" }} />
+                  <span style={{ fontWeight: 700, fontSize: "16px" }}>Room {row.room_id}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "5px", fontSize: "14px", color: "#374151" }}>
+                  <div><strong>Floor:</strong> {row.floor_id}</div>
+                  <div><strong>Capacity:</strong> {row.capacity} people</div>
+                  {row.booking_duration > 0 && <div><strong>Typical booking:</strong> {formatDuration(row.booking_duration)}</div>}
+                </div>
+                {insightsLoading ? (
+                  <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: "#E5E7EB", animation: "pulse 1.2s ease-in-out infinite" }} />
+                    <div style={{ height: "12px", width: "160px", borderRadius: "6px", background: "#E5E7EB", animation: "pulse 1.2s ease-in-out infinite" }} />
+                  </div>
+                ) : insight ? (
+                  <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: insight.color || "#6B7280", fontWeight: 600 }}>
+                    <span style={{ fontSize: "14px" }}>
+                      {insight.color === "#15803D" ? "🟢" : insight.color === "#65A30D" ? "🟡" : insight.color === "#D97706" ? "🟠" : insight.color === "#DC2626" ? "🔴" : "⚪"}
+                    </span>
+                    {insight.label}
+                    {insight.pct !== null && insight.pct !== undefined && (
+                      <span style={{ color: "#9CA3AF", fontWeight: 400 }}>({insight.pct}%)</span>
+                    )}
+                  </div>
+                ) : null}
+                <div style={{ marginTop: "14px", background: "#F0FDF4", color: "#15803D", fontWeight: 600, fontSize: "13px", padding: "6px 12px", borderRadius: "8px", textAlign: "center" }}>Available</div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "5px", fontSize: "14px", color: "#374151" }}>
-                <div><strong>Floor:</strong> {row.floor_id}</div>
-                <div><strong>Capacity:</strong> {row.capacity} people</div>
-                {row.booking_duration > 0 && <div><strong>Typical booking:</strong> {formatDuration(row.booking_duration)}</div>}
-              </div>
-              <div style={{ marginTop: "14px", background: "#F0FDF4", color: "#15803D", fontWeight: 600, fontSize: "13px", padding: "6px 12px", borderRadius: "8px", textAlign: "center" }}>Available</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -351,7 +407,7 @@ export default function App() {
 
           {/* End date picker */}
           <div style={{ ...filterWrap, position: "relative" }}>
-            <label style={labelStyle}>Date</label>
+            <label style={labelStyle}>End Date</label>
             <button
               onClick={() => setShowHistoryCalendar(!showHistoryCalendar)}
               style={inputStyle}
@@ -459,6 +515,7 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", fontFamily: "Arial", minHeight: "100vh" }}>
+      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
       <div style={{ width: "200px", background: "#111827", color: "white", padding: "20px", display: "flex", flexDirection: "column", gap: "6px", flexShrink: 0 }}>
         <div style={{ marginBottom: "24px" }}>
           <h2 style={{ fontSize: "18px", margin: 0 }}>TMU Seats</h2>
