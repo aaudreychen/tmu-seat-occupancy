@@ -24,110 +24,27 @@ const buildings = Object.keys(buildingMap);
 
 type Page = "seats" | "suggested" | "wellness" | "history";
 
-// ---------------------------------------------------------------------------
-// Wellness tips pool -- randomized on each visit.
-// ---------------------------------------------------------------------------
 const ALL_WELLNESS_TIPS = [
-  {
-    emoji: "🧠",
-    title: "Use the Pomodoro Technique",
-    body: "Study for 25 minutes, then take a 5-minute break. After 4 cycles take a longer 15-30 min break. This keeps focus sharp and prevents burnout.",
-  },
-  {
-    emoji: "💧",
-    title: "Stay Hydrated",
-    body: "Keep a water bottle at your desk. Dehydration reduces concentration by up to 20%. Aim for 8 cups a day, especially during exam season.",
-  },
-  {
-    emoji: "🚶",
-    title: "Move Between Sessions",
-    body: "A short walk between study blocks improves memory consolidation and reduces physical tension from sitting. Even 5 minutes around the floor helps.",
-  },
-  {
-    emoji: "🌿",
-    title: "Find a Quieter Floor",
-    body: "Higher floors of the SLC tend to be quieter. If you are easily distracted, filter for upper floors using the Available Seats page.",
-  },
-  {
-    emoji: "🎧",
-    title: "Use White Noise or Ambient Sound",
-    body: "Busy campus environments can be distracting. Brown or white noise helps mask background chatter. Apps like Noisli or a YouTube ambient stream work well.",
-  },
-  {
-    emoji: "😴",
-    title: "Prioritise Sleep Over All-Nighters",
-    body: "Sleep is when your brain consolidates what you studied. A 7-8 hour night before an exam outperforms cramming through the night every time.",
-  },
-  {
-    emoji: "🍎",
-    title: "Eat Before Long Study Sessions",
-    body: "Your brain uses around 20% of your body's energy. Do not study on an empty stomach. Bring a snack like nuts, fruit, or a granola bar.",
-  },
-  {
-    emoji: "📴",
-    title: "Set a Phone-Free Block",
-    body: "Put your phone face-down or in a bag during your focus block. Apps like Forest or iOS Focus Mode can help if you struggle with the habit.",
-  },
-  {
-    emoji: "🤝",
-    title: "Book Group Rooms Early",
-    body: "Group study rooms fill up fast between 11 AM and 3 PM. Use the Suggested Rooms page to find a room with enough capacity for your group.",
-  },
-  {
-    emoji: "🧘",
-    title: "Do Not Skip Breaks",
-    body: "Pushing through for 3 or more hours straight leads to diminishing returns. Scheduled breaks are not wasted time — they are part of effective studying.",
-  },
-  {
-    emoji: "📝",
-    title: "Review Notes Within 24 Hours",
-    body: "The forgetting curve drops steeply in the first day after learning. Even a 10-minute review the same evening dramatically improves long-term retention.",
-  },
-  {
-    emoji: "🔁",
-    title: "Use Active Recall, Not Re-reading",
-    body: "Closing your notes and recalling key points from memory is far more effective than re-reading. Flashcard apps like Anki are great for this.",
-  },
-  {
-    emoji: "🗺️",
-    title: "Change Your Study Space Occasionally",
-    body: "Studying the same material in different locations has been shown to improve recall. Try a different floor or building for variety.",
-  },
-  {
-    emoji: "💬",
-    title: "Manage Exam Anxiety",
-    body: "Light exercise, deep breathing, or a 10-minute walk before an exam can lower cortisol and improve performance. TMU also offers free counselling through Student Wellbeing.",
-  },
-  {
-    emoji: "⚡",
-    title: "Track Your Energy, Not Just Your Time",
-    body: "Schedule your hardest tasks during your peak energy hours. Most people are sharpest in the mid-morning. Save lighter tasks for lower-energy periods.",
-  },
-  {
-    emoji: "🎯",
-    title: "Avoid Multitasking",
-    body: "Switching between tasks reduces efficiency by up to 40%. Focus on one subject per session before moving to the next.",
-  },
-  {
-    emoji: "🗣️",
-    title: "Teach What You Learn",
-    body: "Explaining a concept to someone else — or even out loud to yourself — forces you to identify gaps in your understanding that passive studying misses.",
-  },
-  {
-    emoji: "🧹",
-    title: "Keep Your Study Space Tidy",
-    body: "A cluttered desk creates visual noise that competes for your attention. Clear your immediate workspace before starting even if the rest of the room is messy.",
-  },
-  {
-    emoji: "⏰",
-    title: "Set a Finish Time, Not Just a Start Time",
-    body: "Knowing your session ends at a specific time creates urgency that improves focus. Open-ended sessions tend to expand into unproductive stretches.",
-  },
-  {
-    emoji: "☀️",
-    title: "Get Natural Light When Possible",
-    body: "Natural light improves alertness and mood. When choosing a study spot, prefer seats near windows or well-lit areas over dim corners.",
-  },
+  { emoji: "🧠", title: "Use the Pomodoro Technique", body: "Study for 25 minutes, then take a 5-minute break. After 4 cycles take a longer 15-30 min break. This keeps focus sharp and prevents burnout." },
+  { emoji: "💧", title: "Stay Hydrated", body: "Keep a water bottle at your desk. Dehydration reduces concentration by up to 20%. Aim for 8 cups a day, especially during exam season." },
+  { emoji: "🚶", title: "Move Between Sessions", body: "A short walk between study blocks improves memory consolidation and reduces physical tension from sitting. Even 5 minutes around the floor helps." },
+  { emoji: "🌿", title: "Find a Quieter Floor", body: "Higher floors of the SLC tend to be quieter. If you are easily distracted, filter for upper floors using the Available Seats page." },
+  { emoji: "🎧", title: "Use White Noise or Ambient Sound", body: "Busy campus environments can be distracting. Brown or white noise helps mask background chatter. Apps like Noisli or a YouTube ambient stream work well." },
+  { emoji: "😴", title: "Prioritise Sleep Over All-Nighters", body: "Sleep is when your brain consolidates what you studied. A 7-8 hour night before an exam outperforms cramming through the night every time." },
+  { emoji: "🍎", title: "Eat Before Long Study Sessions", body: "Your brain uses around 20% of your body's energy. Do not study on an empty stomach. Bring a snack like nuts, fruit, or a granola bar." },
+  { emoji: "📴", title: "Set a Phone-Free Block", body: "Put your phone face-down or in a bag during your focus block. Apps like Forest or iOS Focus Mode can help if you struggle with the habit." },
+  { emoji: "🤝", title: "Book Group Rooms Early", body: "Group study rooms fill up fast between 11 AM and 3 PM. Use the Suggested Rooms page to find a room with enough capacity for your group." },
+  { emoji: "🧘", title: "Do Not Skip Breaks", body: "Pushing through for 3 or more hours straight leads to diminishing returns. Scheduled breaks are not wasted time — they are part of effective studying." },
+  { emoji: "📝", title: "Review Notes Within 24 Hours", body: "The forgetting curve drops steeply in the first day after learning. Even a 10-minute review the same evening dramatically improves long-term retention." },
+  { emoji: "🔁", title: "Use Active Recall, Not Re-reading", body: "Closing your notes and recalling key points from memory is far more effective than re-reading. Flashcard apps like Anki are great for this." },
+  { emoji: "🗺️", title: "Change Your Study Space Occasionally", body: "Studying the same material in different locations has been shown to improve recall. Try a different floor or building for variety." },
+  { emoji: "💬", title: "Manage Exam Anxiety", body: "Light exercise, deep breathing, or a 10-minute walk before an exam can lower cortisol and improve performance. TMU also offers free counselling through Student Wellbeing." },
+  { emoji: "⚡", title: "Track Your Energy, Not Just Your Time", body: "Schedule your hardest tasks during your peak energy hours. Most people are sharpest in the mid-morning. Save lighter tasks for lower-energy periods." },
+  { emoji: "🎯", title: "Avoid Multitasking", body: "Switching between tasks reduces efficiency by up to 40%. Focus on one subject per session before moving to the next." },
+  { emoji: "🗣️", title: "Teach What You Learn", body: "Explaining a concept to someone else — or even out loud to yourself — forces you to identify gaps in your understanding that passive studying misses." },
+  { emoji: "🧹", title: "Keep Your Study Space Tidy", body: "A cluttered desk creates visual noise that competes for your attention. Clear your immediate workspace before starting even if the rest of the room is messy." },
+  { emoji: "⏰", title: "Set a Finish Time, Not Just a Start Time", body: "Knowing your session ends at a specific time creates urgency that improves focus. Open-ended sessions tend to expand into unproductive stretches." },
+  { emoji: "☀️", title: "Get Natural Light When Possible", body: "Natural light improves alertness and mood. When choosing a study spot, prefer seats near windows or well-lit areas over dim corners." },
 ];
 
 const TIPS_PER_PAGE = 12;
@@ -150,78 +67,53 @@ const formatDuration = (hours: number) => {
   return `${m}m`;
 };
 
-// ---------------------------------------------------------------------------
-// Shared style constants
-// ---------------------------------------------------------------------------
-const labelStyle: React.CSSProperties = {
-  fontWeight: 600,
-  display: "block",
-  marginBottom: "8px",
-  whiteSpace: "nowrap",
-  fontSize: "14px",
-};
+const labelStyle: React.CSSProperties = { fontWeight: 600, display: "block", marginBottom: "8px", whiteSpace: "nowrap", fontSize: "14px" };
+const filterWrap: React.CSSProperties = { display: "flex", flexDirection: "column" };
+const inputStyle: React.CSSProperties = { padding: "10px 14px", borderRadius: "10px", border: "1px solid #ccc", background: "white", whiteSpace: "nowrap", cursor: "pointer", fontSize: "14px" };
 
-const filterWrap: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: "10px",
-  border: "1px solid #ccc",
-  background: "white",
-  whiteSpace: "nowrap",
-  cursor: "pointer",
-  fontSize: "14px",
-};
-
-// ---------------------------------------------------------------------------
-// Main App component
-// ---------------------------------------------------------------------------
 export default function App() {
   const [page, setPage] = useState<Page>("seats");
-
-  // -- Shared data state -----------------------------------------------------
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [building, setBuilding] = useState<string>(buildings[0]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showCalendar, setShowCalendar] = useState(false);
-
-  // -- Available Seats page state --------------------------------------------
   const [filter, setFilter] = useState<"ALL" | "AVAILABLE" | "UNAVAILABLE">("ALL");
   const [selectedFloor, setSelectedFloor] = useState<number | null>(null);
   const [showFloorPickerSeats, setShowFloorPickerSeats] = useState(false);
-  // Time and capacity filters (from the original dashboard)
   const [selectedTime, setSelectedTime] = useState<string>("09:00");
   const [selectedCapacity, setSelectedCapacity] = useState<string>("ALL");
-
-  // -- Suggested Rooms page state --------------------------------------------
   const [minCapacity, setMinCapacity] = useState<number>(1);
   const [suggestedFloor, setSuggestedFloor] = useState<number | null>(null);
   const [showFloorPickerSuggested, setShowFloorPickerSuggested] = useState(false);
+  const [wellnessTips, setWellnessTips] = useState(() => shuffleArray(ALL_WELLNESS_TIPS).slice(0, TIPS_PER_PAGE));
 
-  // -- Wellness page state ---------------------------------------------------
-  const [wellnessTips, setWellnessTips] = useState(() =>
-    shuffleArray(ALL_WELLNESS_TIPS).slice(0, TIPS_PER_PAGE)
-  );
-
-  useEffect(() => {
-    if (page === "wellness") {
-      setWellnessTips(shuffleArray(ALL_WELLNESS_TIPS).slice(0, TIPS_PER_PAGE));
-    }
-  }, [page]);
-
-  // -- Historical Logs page state -------------------------------------------
+  // History state
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyBuilding, setHistoryBuilding] = useState<string>("ALL");
+  // End date for the 1-year window — set to latest date in data once loaded
+  const [historyEndDate, setHistoryEndDate] = useState<Date>(new Date());
+  const [showHistoryCalendar, setShowHistoryCalendar] = useState(false);
 
-  // -------------------------------------------------------------------------
-  // Fetch occupancy data.
-  // Sends date, time, and floor to the backend (matching the original fetch).
-  // -------------------------------------------------------------------------
+  // On mount, fetch the actual latest timestamp in historical_logs and use
+  // that as the default end date so the window always covers real data.
+  useEffect(() => {
+    fetch(`${API_URL}/trends/date-range`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.latest) {
+          const d = new Date(json.latest + "T12:00:00");
+          if (!isNaN(d.getTime())) setHistoryEndDate(d);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (page === "wellness") setWellnessTips(shuffleArray(ALL_WELLNESS_TIPS).slice(0, TIPS_PER_PAGE));
+  }, [page]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -229,9 +121,7 @@ export default function App() {
       const params = new URLSearchParams();
       params.append("date", dateStr);
       params.append("time", selectedTime);
-      if (selectedFloor) {
-        params.append("floor", `F${selectedFloor}`);
-      }
+      if (selectedFloor) params.append("floor", `F${selectedFloor}`);
       const res = await fetch(`${API_URL}/availability/${building}?${params.toString()}`);
       const json = await res.json();
       setData(Array.isArray(json) ? json : []);
@@ -243,18 +133,17 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [building, selectedDate, selectedTime, selectedFloor]);
+  useEffect(() => { fetchData(); }, [building, selectedDate, selectedTime, selectedFloor]);
 
-  // -------------------------------------------------------------------------
-  // Fetch historical trend data for the History page.
-  // -------------------------------------------------------------------------
-  const fetchHistory = async (bldg: string) => {
+  // Fetch history — passes end_date so backend computes [end_date-1yr, end_date]
+  const fetchHistory = async (bldg: string, endDate: Date) => {
     try {
       setHistoryLoading(true);
-      const param = bldg !== "ALL" ? `?building=${encodeURIComponent(bldg)}` : "";
-      const res = await fetch(`${API_URL}/trends${param}`);
+      const endStr = endDate.toISOString().split("T")[0];
+      const params = new URLSearchParams();
+      params.append("end_date", endStr);
+      if (bldg !== "ALL") params.append("building", bldg);
+      const res = await fetch(`${API_URL}/trends?${params.toString()}`);
       const json = await res.json();
       setHistoryData(Array.isArray(json) ? json : []);
     } catch {
@@ -265,31 +154,12 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (page === "history") fetchHistory(historyBuilding);
-  }, [page, historyBuilding]);
+    if (page === "history") fetchHistory(historyBuilding, historyEndDate);
+  }, [page, historyBuilding, historyEndDate]);
 
-  // -------------------------------------------------------------------------
-  // All unique floor numbers present in the current dataset.
-  // -------------------------------------------------------------------------
-  const availableFloors = Array.from(
-    new Set(
-      data
-        .map((row) => parseInt(row.floor_id?.replace("F", "") || "0"))
-        .filter((n) => !isNaN(n) && n > 0)
-    )
-  ).sort((a, b) => a - b);
+  const availableFloors = Array.from(new Set(data.map((row) => parseInt(row.floor_id?.replace("F", "") || "0")).filter((n) => !isNaN(n) && n > 0))).sort((a, b) => a - b);
+  const availableCapacities = Array.from(new Set(data.map((row) => Number(row.capacity)))).sort((a, b) => a - b);
 
-  // -------------------------------------------------------------------------
-  // Dynamic capacities from the current dataset (for the seats capacity filter).
-  // -------------------------------------------------------------------------
-  const availableCapacities = Array.from(
-    new Set(data.map((row) => Number(row.capacity)))
-  ).sort((a, b) => a - b);
-
-  // -------------------------------------------------------------------------
-  // Available Seats: client-side filter by occupancy status and capacity.
-  // Floor and time are already applied server-side via fetchData params.
-  // -------------------------------------------------------------------------
   const filteredSeats = data.filter((row) => {
     if (filter === "AVAILABLE" && row.occupied !== 0) return false;
     if (filter === "UNAVAILABLE" && row.occupied !== 1) return false;
@@ -297,222 +167,79 @@ export default function App() {
     return true;
   });
 
-  // -------------------------------------------------------------------------
-  // Suggested Rooms: one card per room using the most recent record.
-  // -------------------------------------------------------------------------
   const suggestedRooms = useMemo(() => {
     const roomMap: Record<string, any> = {};
     for (const row of data) {
       const id = row.room_id;
       if (!id) continue;
-      if (!roomMap[id] || row.timestamp_iso > roomMap[id].timestamp_iso) {
-        roomMap[id] = row;
-      }
+      if (!roomMap[id] || row.timestamp_iso > roomMap[id].timestamp_iso) roomMap[id] = row;
     }
-    return Object.values(roomMap)
-      .filter((row) => {
-        if (row.occupied !== 0) return false;
-        if ((row.capacity || 0) < minCapacity) return false;
-        if (suggestedFloor) {
-          const f = parseInt(row.floor_id?.replace("F", "") || "0");
-          if (f !== suggestedFloor) return false;
-        }
-        return true;
-      })
-      .sort((a, b) => (b.capacity || 0) - (a.capacity || 0));
+    return Object.values(roomMap).filter((row) => {
+      if (row.occupied !== 0) return false;
+      if ((row.capacity || 0) < minCapacity) return false;
+      if (suggestedFloor) { const f = parseInt(row.floor_id?.replace("F", "") || "0"); if (f !== suggestedFloor) return false; }
+      return true;
+    }).sort((a, b) => (b.capacity || 0) - (a.capacity || 0));
   }, [data, minCapacity, suggestedFloor]);
 
-  // -------------------------------------------------------------------------
-  // Sidebar nav item
-  // -------------------------------------------------------------------------
   const NavItem = ({ p, label, emoji }: { p: Page; label: string; emoji: string }) => (
-    <button
-      onClick={() => setPage(p)}
-      style={{
-        background: page === p ? "#1F2937" : "transparent",
-        border: "none",
-        color: page === p ? "white" : "#9CA3AF",
-        padding: "10px 14px",
-        borderRadius: "8px",
-        cursor: "pointer",
-        textAlign: "left",
-        fontSize: "13px",
-        fontWeight: page === p ? 700 : 400,
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-        width: "100%",
-        whiteSpace: "nowrap",
-      }}
-    >
-      <span style={{ fontSize: "16px" }}>{emoji}</span>
-      {label}
+    <button onClick={() => setPage(p)} style={{ background: page === p ? "#1F2937" : "transparent", border: "none", color: page === p ? "white" : "#9CA3AF", padding: "10px 14px", borderRadius: "8px", cursor: "pointer", textAlign: "left", fontSize: "13px", fontWeight: page === p ? 700 : 400, display: "flex", alignItems: "center", gap: "10px", width: "100%", whiteSpace: "nowrap" }}>
+      <span style={{ fontSize: "16px" }}>{emoji}</span>{label}
     </button>
   );
 
-  // =========================================================================
-  // Available Seats page — full filter set: building, date, time, floor, capacity
-  // =========================================================================
   const SeatsPage = () => (
     <div>
       <h1 style={{ marginBottom: "24px" }}>Available Seats</h1>
-
-      {/* Filter row */}
       <div style={{ display: "flex", gap: "16px", marginBottom: "24px", alignItems: "flex-end", flexWrap: "wrap" }}>
-
-        {/* Building */}
         <div style={filterWrap}>
           <label style={labelStyle}>Building</label>
-          <select
-            value={building}
-            onChange={(e) => {
-              setSelectedFloor(null);
-              setSelectedCapacity("ALL");
-              setBuilding(e.target.value);
-            }}
-            style={inputStyle}
-          >
+          <select value={building} onChange={(e) => { setSelectedFloor(null); setSelectedCapacity("ALL"); setBuilding(e.target.value); }} style={inputStyle}>
             {buildings.map((b) => <option key={b} value={b}>{buildingMap[b]}</option>)}
           </select>
         </div>
-
-        {/* Date */}
         <div style={{ ...filterWrap, position: "relative" }}>
           <label style={labelStyle}>Date</label>
-          <button
-            onClick={() => { setShowCalendar(!showCalendar); setShowFloorPickerSeats(false); }}
-            style={inputStyle}
-          >
-            {selectedDate.toDateString()}
-          </button>
-          {showCalendar && (
-            <div style={{ position: "absolute", top: "100%", zIndex: 100 }}>
-              <Calendar
-                selectedDate={selectedDate}
-                onSelectDate={(d) => { setSelectedDate(d); setShowCalendar(false); }}
-                onClose={() => setShowCalendar(false)}
-              />
-            </div>
-          )}
+          <button onClick={() => { setShowCalendar(!showCalendar); setShowFloorPickerSeats(false); }} style={inputStyle}>{selectedDate.toDateString()}</button>
+          {showCalendar && (<div style={{ position: "absolute", top: "100%", zIndex: 100 }}><Calendar selectedDate={selectedDate} onSelectDate={(d) => { setSelectedDate(d); setShowCalendar(false); }} onClose={() => setShowCalendar(false)} /></div>)}
         </div>
-
-        {/* Time */}
         <div style={filterWrap}>
           <label style={labelStyle}>Time</label>
-          <select
-            value={selectedTime}
-            onChange={(e) => setSelectedTime(e.target.value)}
-            style={inputStyle}
-          >
-            {Array.from({ length: 16 }, (_, i) => {
-              const hour = 9 + Math.floor(i / 2);
-              const minute = i % 2 === 0 ? "00" : "30";
-              const time = `${hour.toString().padStart(2, "0")}:${minute}`;
-              return <option key={time} value={time}>{time}</option>;
-            })}
+          <select value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)} style={inputStyle}>
+            {Array.from({ length: 16 }, (_, i) => { const hour = 9 + Math.floor(i / 2); const minute = i % 2 === 0 ? "00" : "30"; const time = `${hour.toString().padStart(2, "0")}:${minute}`; return <option key={time} value={time}>{time}</option>; })}
           </select>
         </div>
-
-        {/* Floor */}
         <div style={{ ...filterWrap, position: "relative", minWidth: "140px" }}>
           <label style={labelStyle}>Floor</label>
-          <button
-            onClick={() => { setShowFloorPickerSeats(!showFloorPickerSeats); setShowCalendar(false); }}
-            style={inputStyle}
-          >
-            {selectedFloor ? `Floor ${selectedFloor}` : "All Floors"}
-          </button>
-          {showFloorPickerSeats && (
-            <FloorPicker
-              selectedFloor={selectedFloor || 0}
-              onSelectFloor={(n) => {
-                setSelectedFloor(n === 0 ? null : n);
-                setShowFloorPickerSeats(false);
-              }}
-              onClose={() => setShowFloorPickerSeats(false)}
-              availableFloors={availableFloors}
-            />
-          )}
+          <button onClick={() => { setShowFloorPickerSeats(!showFloorPickerSeats); setShowCalendar(false); }} style={inputStyle}>{selectedFloor ? `Floor ${selectedFloor}` : "All Floors"}</button>
+          {showFloorPickerSeats && (<FloorPicker selectedFloor={selectedFloor || 0} onSelectFloor={(n) => { setSelectedFloor(n === 0 ? null : n); setShowFloorPickerSeats(false); }} onClose={() => setShowFloorPickerSeats(false)} availableFloors={availableFloors} />)}
         </div>
-
-        {/* Capacity */}
         <div style={filterWrap}>
           <label style={labelStyle}>Capacity</label>
-          <select
-            value={selectedCapacity}
-            onChange={(e) => setSelectedCapacity(e.target.value)}
-            style={inputStyle}
-          >
+          <select value={selectedCapacity} onChange={(e) => setSelectedCapacity(e.target.value)} style={inputStyle}>
             <option value="ALL">All Capacities</option>
-            {availableCapacities.map((cap) => (
-              <option key={cap} value={cap}>{cap} Seats</option>
-            ))}
+            {availableCapacities.map((cap) => <option key={cap} value={cap}>{cap} Seats</option>)}
           </select>
         </div>
       </div>
-
-      {/* Occupancy status filter buttons */}
       <div style={{ marginBottom: "24px", display: "flex", gap: "10px" }}>
         {(["ALL", "AVAILABLE", "UNAVAILABLE"] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            style={{
-              padding: "10px 20px",
-              borderRadius: "20px",
-              border: "1px solid #ccc",
-              fontWeight: 600,
-              cursor: "pointer",
-              background: filter === f
-                ? (f === "AVAILABLE" ? "#16A34A" : f === "UNAVAILABLE" ? "#B91C1C" : "#2563EB")
-                : "white",
-              color: filter === f ? "white" : "black",
-            }}
-          >
+          <button key={f} onClick={() => setFilter(f)} style={{ padding: "10px 20px", borderRadius: "20px", border: "1px solid #ccc", fontWeight: 600, cursor: "pointer", background: filter === f ? (f === "AVAILABLE" ? "#16A34A" : f === "UNAVAILABLE" ? "#B91C1C" : "#2563EB") : "white", color: filter === f ? "white" : "black" }}>
             {f.charAt(0) + f.slice(1).toLowerCase()}
           </button>
         ))}
       </div>
-
-      {/* Room list */}
-      {loading ? <p>Loading results...</p> : filteredSeats.length === 0 ? (
-        <p style={{ color: "#6B7280" }}>No room data found for this selection.</p>
-      ) : (
+      {loading ? <p>Loading results...</p> : filteredSeats.length === 0 ? <p style={{ color: "#6B7280" }}>No room data found for this selection.</p> : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {filteredSeats.map((row, i) => {
             const ts = new Date(row.timestamp_iso);
             return (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "20px",
-                  background: "white",
-                  borderRadius: "12px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-                }}
-              >
+              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px", background: "white", borderRadius: "12px", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
                 <div>
                   <div style={{ fontWeight: 700 }}>Room {row.room_id} — Floor {row.floor_id}</div>
-                  <div style={{ fontSize: "14px", color: "#6B7280" }}>
-                    {ts.toLocaleDateString()} {ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    {" | Duration: "}{formatDuration(row.booking_duration)}
-                    {" | Capacity: "}{row.capacity}
-                    {" | Occupied: "}{row.occupied === 1 ? "Yes" : "No"}
-                  </div>
+                  <div style={{ fontSize: "14px", color: "#6B7280" }}>{ts.toLocaleDateString()} {ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} | Duration: {formatDuration(row.booking_duration)} | Capacity: {row.capacity} | Occupied: {row.occupied === 1 ? "Yes" : "No"}</div>
                 </div>
-                <div
-                  style={{
-                    width: "24px",
-                    height: "24px",
-                    borderRadius: "50%",
-                    backgroundColor: row.occupied === 0 ? "#16A34A" : "#B91C1C",
-                    flexShrink: 0,
-                    marginLeft: "16px",
-                  }}
-                />
+                <div style={{ width: "24px", height: "24px", borderRadius: "50%", backgroundColor: row.occupied === 0 ? "#16A34A" : "#B91C1C", flexShrink: 0, marginLeft: "16px" }} />
               </div>
             );
           })}
@@ -521,164 +248,66 @@ export default function App() {
     </div>
   );
 
-  // =========================================================================
-  // Suggested Rooms page
-  // =========================================================================
   const SuggestedPage = () => (
     <div>
       <h1 style={{ marginBottom: "8px" }}>Suggested Rooms</h1>
-      <p style={{ color: "#6B7280", marginBottom: "24px" }}>
-        Rooms that are currently free, sorted by capacity. Filter by group size or floor to narrow your options.
-      </p>
-
+      <p style={{ color: "#6B7280", marginBottom: "24px" }}>Rooms that are currently free, sorted by capacity.</p>
       <div style={{ display: "flex", gap: "16px", marginBottom: "30px", alignItems: "flex-end", flexWrap: "nowrap" }}>
-
         <div style={filterWrap}>
           <label style={labelStyle}>Building</label>
-          <select
-            value={building}
-            onChange={(e) => { setSuggestedFloor(null); setBuilding(e.target.value); }}
-            style={inputStyle}
-          >
+          <select value={building} onChange={(e) => { setSuggestedFloor(null); setBuilding(e.target.value); }} style={inputStyle}>
             {buildings.map((b) => <option key={b} value={b}>{buildingMap[b]}</option>)}
           </select>
         </div>
-
         <div style={{ ...filterWrap, position: "relative" }}>
           <label style={labelStyle}>Date</label>
-          <button
-            onClick={() => { setShowCalendar(!showCalendar); setShowFloorPickerSuggested(false); }}
-            style={inputStyle}
-          >
-            {selectedDate.toDateString()}
-          </button>
-          {showCalendar && (
-            <div style={{ position: "absolute", top: "100%", zIndex: 100 }}>
-              <Calendar
-                selectedDate={selectedDate}
-                onSelectDate={(d) => { setSelectedDate(d); setShowCalendar(false); }}
-                onClose={() => setShowCalendar(false)}
-              />
-            </div>
-          )}
+          <button onClick={() => { setShowCalendar(!showCalendar); setShowFloorPickerSuggested(false); }} style={inputStyle}>{selectedDate.toDateString()}</button>
+          {showCalendar && (<div style={{ position: "absolute", top: "100%", zIndex: 100 }}><Calendar selectedDate={selectedDate} onSelectDate={(d) => { setSelectedDate(d); setShowCalendar(false); }} onClose={() => setShowCalendar(false)} /></div>)}
         </div>
-
         <div style={filterWrap}>
           <label style={labelStyle}>Min. Capacity</label>
-          <select
-            value={minCapacity}
-            onChange={(e) => setMinCapacity(Number(e.target.value))}
-            style={inputStyle}
-          >
-            {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => (
-              <option key={n} value={n}>{n}+ people</option>
-            ))}
+          <select value={minCapacity} onChange={(e) => setMinCapacity(Number(e.target.value))} style={inputStyle}>
+            {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => <option key={n} value={n}>{n}+ people</option>)}
           </select>
         </div>
-
         <div style={{ ...filterWrap, position: "relative", minWidth: "140px" }}>
           <label style={labelStyle}>Floor</label>
-          <button
-            onClick={() => { setShowFloorPickerSuggested(!showFloorPickerSuggested); setShowCalendar(false); }}
-            style={inputStyle}
-          >
-            {suggestedFloor ? `Floor ${suggestedFloor}` : "All Floors"}
-          </button>
-          {showFloorPickerSuggested && (
-            <FloorPicker
-              selectedFloor={suggestedFloor || 0}
-              onSelectFloor={(n) => {
-                setSuggestedFloor(n === suggestedFloor ? null : n);
-                setShowFloorPickerSuggested(false);
-              }}
-              onClose={() => setShowFloorPickerSuggested(false)}
-              availableFloors={availableFloors}
-            />
-          )}
+          <button onClick={() => { setShowFloorPickerSuggested(!showFloorPickerSuggested); setShowCalendar(false); }} style={inputStyle}>{suggestedFloor ? `Floor ${suggestedFloor}` : "All Floors"}</button>
+          {showFloorPickerSuggested && (<FloorPicker selectedFloor={suggestedFloor || 0} onSelectFloor={(n) => { setSuggestedFloor(n === suggestedFloor ? null : n); setShowFloorPickerSuggested(false); }} onClose={() => setShowFloorPickerSuggested(false)} availableFloors={availableFloors} />)}
         </div>
       </div>
-
       {loading ? <p>Loading...</p> : suggestedRooms.length === 0 ? (
-        <div style={{ padding: "40px", textAlign: "center", background: "white", borderRadius: "12px", color: "#6B7280" }}>
-          No available rooms match your criteria. Try adjusting the capacity or floor filter.
-        </div>
+        <div style={{ padding: "40px", textAlign: "center", background: "white", borderRadius: "12px", color: "#6B7280" }}>No available rooms match your criteria.</div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "16px" }}>
-          {suggestedRooms.map((row, i) => {
-            const isTop = i === 0;
-            return (
-              <div
-                key={i}
-                style={{
-                  background: "white",
-                  borderRadius: "14px",
-                  padding: "20px",
-                  boxShadow: isTop
-                    ? "0 0 0 2px #16A34A, 0 4px 12px rgba(0,0,0,0.08)"
-                    : "0 2px 6px rgba(0,0,0,0.06)",
-                  position: "relative",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0",
-                }}
-              >
-                {isTop && (
-                  <div style={{
-                    position: "absolute", top: "14px", right: "14px",
-                    background: "#DCFCE7", color: "#15803D",
-                    fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px",
-                  }}>
-                    Best Match
-                  </div>
-                )}
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-                  <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#16A34A", flexShrink: 0 }} />
-                  <span style={{ fontWeight: 700, fontSize: "16px" }}>Room {row.room_id}</span>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "5px", fontSize: "14px", color: "#374151" }}>
-                  <div><strong>Floor:</strong> {row.floor_id}</div>
-                  <div><strong>Capacity:</strong> {row.capacity} people</div>
-                  {row.booking_duration > 0 && (
-                    <div><strong>Typical booking:</strong> {formatDuration(row.booking_duration)}</div>
-                  )}
-                </div>
-                <div style={{
-                  marginTop: "14px", background: "#F0FDF4", color: "#15803D",
-                  fontWeight: 600, fontSize: "13px", padding: "6px 12px",
-                  borderRadius: "8px", textAlign: "center",
-                }}>
-                  Available
-                </div>
+          {suggestedRooms.map((row, i) => (
+            <div key={i} style={{ background: "white", borderRadius: "14px", padding: "20px", boxShadow: i === 0 ? "0 0 0 2px #16A34A, 0 4px 12px rgba(0,0,0,0.08)" : "0 2px 6px rgba(0,0,0,0.06)", position: "relative", display: "flex", flexDirection: "column" }}>
+              {i === 0 && <div style={{ position: "absolute", top: "14px", right: "14px", background: "#DCFCE7", color: "#15803D", fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px" }}>Best Match</div>}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+                <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#16A34A" }} />
+                <span style={{ fontWeight: 700, fontSize: "16px" }}>Room {row.room_id}</span>
               </div>
-            );
-          })}
+              <div style={{ display: "flex", flexDirection: "column", gap: "5px", fontSize: "14px", color: "#374151" }}>
+                <div><strong>Floor:</strong> {row.floor_id}</div>
+                <div><strong>Capacity:</strong> {row.capacity} people</div>
+                {row.booking_duration > 0 && <div><strong>Typical booking:</strong> {formatDuration(row.booking_duration)}</div>}
+              </div>
+              <div style={{ marginTop: "14px", background: "#F0FDF4", color: "#15803D", fontWeight: 600, fontSize: "13px", padding: "6px 12px", borderRadius: "8px", textAlign: "center" }}>Available</div>
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 
-  // =========================================================================
-  // Wellness Tips page
-  // =========================================================================
   const WellnessPage = () => (
     <div>
       <h1 style={{ marginBottom: "8px" }}>Study Wellness Tips</h1>
-      <p style={{ color: "#6B7280", marginBottom: "6px" }}>
-        Finding a seat is only half the battle. Here are some tips to make your session as effective as possible.
-      </p>
-      <p style={{ color: "#9CA3AF", fontSize: "13px", marginBottom: "28px" }}>
-        Navigate away and come back for a fresh set of tips.
-      </p>
+      <p style={{ color: "#6B7280", marginBottom: "6px" }}>Finding a seat is only half the battle.</p>
+      <p style={{ color: "#9CA3AF", fontSize: "13px", marginBottom: "28px" }}>Navigate away and come back for a fresh set of tips.</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
         {wellnessTips.map((tip, i) => (
-          <div
-            key={i}
-            style={{
-              background: "white", borderRadius: "14px", padding: "22px",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
-              display: "flex", flexDirection: "column", gap: "8px",
-            }}
-          >
+          <div key={i} style={{ background: "white", borderRadius: "14px", padding: "22px", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "8px" }}>
             <div style={{ fontSize: "28px" }}>{tip.emoji}</div>
             <div style={{ fontWeight: 700, fontSize: "15px", color: "#111827" }}>{tip.title}</div>
             <div style={{ fontSize: "13px", color: "#6B7280", lineHeight: "1.6" }}>{tip.body}</div>
@@ -688,105 +317,98 @@ export default function App() {
     </div>
   );
 
-  // =========================================================================
-  // Historical Logs page
-  // =========================================================================
   const HistoryPage = () => {
-    const shortMonth = (m: string) => {
-      const [y, mo] = m.split("-");
-      const d = new Date(parseInt(y), parseInt(mo) - 1, 1);
-      return d.toLocaleDateString("en-CA", { month: "short" }) + " '" + y.slice(2);
-    };
-    const fmtMonth = (m: string) => {
-      const [y, mo] = m.split("-");
-      const d = new Date(parseInt(y), parseInt(mo) - 1, 1);
-      return d.toLocaleDateString("en-CA", { month: "long", year: "numeric" });
-    };
-    const fmtDur = (h: number | null) => {
-      if (h == null) return "—";
-      const mins = Math.round(h * 60);
-      const hh = Math.floor(mins / 60);
-      const mm = mins % 60;
-      return hh > 0 ? `${hh}h ${mm}m` : `${mm}m`;
-    };
+    const shortMonth = (m: string) => { const [y, mo] = m.split("-"); const d = new Date(parseInt(y), parseInt(mo) - 1, 1); return d.toLocaleDateString("en-CA", { month: "short" }) + " '" + y.slice(2); };
+    const fmtMonth  = (m: string) => { const [y, mo] = m.split("-"); const d = new Date(parseInt(y), parseInt(mo) - 1, 1); return d.toLocaleDateString("en-CA", { month: "long", year: "numeric" }); };
+    const fmtDur    = (h: number | null) => { if (h == null) return "—"; const mins = Math.round(h * 60); const hh = Math.floor(mins / 60); const mm = mins % 60; return hh > 0 ? `${hh}h ${mm}m` : `${mm}m`; };
+
+    const startDate = new Date(historyEndDate);
+    startDate.setDate(startDate.getDate() - 90);
+
     const totalRecords = historyData.reduce((s, r) => s + (r.total_records || 0), 0);
-    const avgOcc = historyData.length
-      ? historyData.reduce((s, r) => s + (r.avg_occupancy ?? 0), 0) / historyData.length
-      : 0;
+    const avgOcc = historyData.length ? historyData.reduce((s, r) => s + (r.avg_occupancy ?? 0), 0) / historyData.length : 0;
     const peak = [...historyData].sort((a, b) => (b.avg_occupancy ?? 0) - (a.avg_occupancy ?? 0))[0];
 
     return (
       <div style={{ maxWidth: "960px" }}>
         <h1 style={{ marginBottom: "4px" }}>Historical Logs</h1>
         <p style={{ color: "#6B7280", marginTop: 0, marginBottom: "24px", fontSize: "14px" }}>
-          Monthly occupancy data from the past two years
+          Showing 3 months of data: {startDate.toLocaleDateString("en-CA", { month: "short", year: "numeric" })} → {historyEndDate.toLocaleDateString("en-CA", { month: "short", year: "numeric" })}
         </p>
 
-        <div style={{ marginBottom: "20px" }}>
-          <select
-            value={historyBuilding}
-            onChange={(e) => setHistoryBuilding(e.target.value)}
-            style={inputStyle}
-          >
-            <option value="ALL">All Buildings</option>
-            {buildings.map((b) => (
-              <option key={b} value={b}>{buildingMap[b]}</option>
-            ))}
-          </select>
+        {/* Filters row */}
+        <div style={{ display: "flex", gap: "16px", marginBottom: "24px", alignItems: "flex-end", flexWrap: "wrap" }}>
+          {/* Building filter */}
+          <div style={filterWrap}>
+            <label style={labelStyle}>Building</label>
+            <select value={historyBuilding} onChange={(e) => setHistoryBuilding(e.target.value)} style={inputStyle}>
+              <option value="ALL">All Buildings</option>
+              {buildings.map((b) => (
+                <option key={b} value={b}>{buildingMap[b]}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* End date picker */}
+          <div style={{ ...filterWrap, position: "relative" }}>
+            <label style={labelStyle}>Date</label>
+            <button
+              onClick={() => setShowHistoryCalendar(!showHistoryCalendar)}
+              style={inputStyle}
+            >
+              {historyEndDate.toDateString()}
+            </button>
+            {showHistoryCalendar && (
+              <div style={{ position: "absolute", top: "100%", zIndex: 100 }}>
+                <Calendar
+                  selectedDate={historyEndDate}
+                  onSelectDate={(d) => { setHistoryEndDate(d); setShowHistoryCalendar(false); }}
+                  onClose={() => setShowHistoryCalendar(false)}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
-        {historyLoading ? (
-          <p>Loading history...</p>
-        ) : historyData.length === 0 ? (
+        {historyLoading ? <p>Loading history...</p> : historyData.length === 0 ? (
           <div style={{ background: "white", borderRadius: "12px", padding: "48px", textAlign: "center", color: "#9CA3AF" }}>
-            No historical data yet. Records appear here as occupancy events are logged.
+            No data found for this selection.
           </div>
         ) : (
           <>
-            {/* Summary cards */}
             <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "24px" }}>
               {[
-                { label: "Months Tracked", value: historyData.length.toString(), color: "#3B82F6" },
-                { label: "Total Records",  value: totalRecords.toLocaleString(),  color: "#8B5CF6" },
-                { label: "Avg Occupancy",  value: `${Math.round(avgOcc * 100)}%`, color: "#F59E0B" },
-                { label: "Peak Month",     value: peak ? fmtMonth(peak.month) : "—", color: "#EF4444" },
+                { label: "Months Tracked", value: historyData.length.toString(),         color: "#3B82F6" },
+                { label: "Total Records",  value: totalRecords.toLocaleString(),          color: "#8B5CF6" },
+                { label: "Avg Occupancy",  value: `${Math.round(avgOcc * 100)}%`,         color: "#F59E0B" },
+                { label: "Peak Month",     value: peak ? fmtMonth(peak.month) : "—",      color: "#EF4444" },
               ].map(({ label, value, color }) => (
-                <div key={label} style={{
-                  background: "white", borderRadius: "12px", padding: "18px 22px",
-                  borderLeft: `4px solid ${color}`, flex: 1, minWidth: "140px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.07)",
-                }}>
+                <div key={label} style={{ background: "white", borderRadius: "12px", padding: "18px 22px", borderLeft: `4px solid ${color}`, flex: 1, minWidth: "140px", boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
                   <div style={{ fontSize: "11px", color: "#6B7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
                   <div style={{ fontSize: "24px", fontWeight: 800, color: "#111827", marginTop: "6px" }}>{value}</div>
                 </div>
               ))}
             </div>
 
-            {/* Occupancy area chart */}
             <div style={{ background: "white", borderRadius: "14px", padding: "24px", marginBottom: "20px", boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
               <h2 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: 700 }}>Monthly Avg Occupancy Rate</h2>
               <ResponsiveContainer width="100%" height={260}>
                 <AreaChart data={historyData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="histOccGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#3B82F6" stopOpacity={0.2} />
+                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.2} />
                       <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
                   <XAxis dataKey="month" tickFormatter={shortMonth} tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                   <YAxis tickFormatter={(v) => `${Math.round(v * 100)}%`} domain={[0, 1]} tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} width={44} />
-                  <Tooltip
-                    formatter={(v: any) => [`${Math.round(v * 100)}%`, "Avg Occupancy"]}
-                    labelFormatter={(l) => fmtMonth(l)}
-                    contentStyle={{ borderRadius: "8px", fontSize: "13px" }}
-                  />
+                  <Tooltip formatter={(v: any) => [`${Math.round(v * 100)}%`, "Avg Occupancy"]} labelFormatter={(l) => fmtMonth(l)} contentStyle={{ borderRadius: "8px", fontSize: "13px" }} />
                   <Area type="monotone" dataKey="avg_occupancy" stroke="#3B82F6" strokeWidth={2.5} fill="url(#histOccGrad)" dot={false} activeDot={{ r: 5 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
 
-            {/* Record volume bar chart */}
             <div style={{ background: "white", borderRadius: "14px", padding: "24px", marginBottom: "20px", boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
               <h2 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: 700 }}>Monthly Record Volume</h2>
               <ResponsiveContainer width="100%" height={220}>
@@ -794,17 +416,12 @@ export default function App() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
                   <XAxis dataKey="month" tickFormatter={shortMonth} tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                   <YAxis tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} width={44} />
-                  <Tooltip
-                    formatter={(v: any) => [v.toLocaleString(), "Records"]}
-                    labelFormatter={(l) => fmtMonth(l)}
-                    contentStyle={{ borderRadius: "8px", fontSize: "13px" }}
-                  />
+                  <Tooltip formatter={(v: any) => [v.toLocaleString(), "Records"]} labelFormatter={(l) => fmtMonth(l)} contentStyle={{ borderRadius: "8px", fontSize: "13px" }} />
                   <Bar dataKey="total_records" fill="#8B5CF6" radius={[4, 4, 0, 0]} maxBarSize={24} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            {/* Monthly breakdown table */}
             <div style={{ background: "white", borderRadius: "14px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.07)", overflowX: "auto" }}>
               <h2 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: 700 }}>Monthly Breakdown</h2>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
@@ -822,11 +439,7 @@ export default function App() {
                       <td style={{ padding: "10px 12px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <div style={{ width: "72px", height: "6px", background: "#E5E7EB", borderRadius: "3px", overflow: "hidden" }}>
-                            <div style={{
-                              width: `${Math.round((row.avg_occupancy ?? 0) * 100)}%`,
-                              height: "100%", borderRadius: "3px",
-                              background: (row.avg_occupancy ?? 0) > 0.75 ? "#EF4444" : (row.avg_occupancy ?? 0) > 0.4 ? "#F59E0B" : "#10B981",
-                            }} />
+                            <div style={{ width: `${Math.round((row.avg_occupancy ?? 0) * 100)}%`, height: "100%", borderRadius: "3px", background: (row.avg_occupancy ?? 0) > 0.75 ? "#EF4444" : (row.avg_occupancy ?? 0) > 0.4 ? "#F59E0B" : "#10B981" }} />
                           </div>
                           <span>{Math.round((row.avg_occupancy ?? 0) * 100)}%</span>
                         </div>
@@ -844,37 +457,18 @@ export default function App() {
     );
   };
 
-  // =========================================================================
-  // Root layout
-  // =========================================================================
   return (
     <div style={{ display: "flex", fontFamily: "Arial", minHeight: "100vh" }}>
-
-      {/* Sidebar */}
-      <div
-        style={{
-          width: "200px",
-          background: "#111827",
-          color: "white",
-          padding: "20px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "6px",
-          flexShrink: 0,
-        }}
-      >
+      <div style={{ width: "200px", background: "#111827", color: "white", padding: "20px", display: "flex", flexDirection: "column", gap: "6px", flexShrink: 0 }}>
         <div style={{ marginBottom: "24px" }}>
           <h2 style={{ fontSize: "18px", margin: 0 }}>TMU Seats</h2>
           <p style={{ color: "#9CA3AF", fontSize: "12px", margin: "4px 0 0 0" }}>Real-Time Data</p>
         </div>
-
-        <NavItem p="seats"     label="Available Seats"  emoji="🪑" />
+        <NavItem p="seats"     label="Available Seats" emoji="🪑" />
         <NavItem p="suggested" label="Suggested Rooms"  emoji="💡" />
         <NavItem p="wellness"  label="Wellness Tips"    emoji="🌿" />
         <NavItem p="history"   label="Historical Logs"  emoji="🗂️" />
       </div>
-
-      {/* Main content */}
       <div style={{ flex: 1, padding: "40px", background: "#F3F4F6", overflowY: "auto" }}>
         {page === "seats"     && <SeatsPage />}
         {page === "suggested" && <SuggestedPage />}
