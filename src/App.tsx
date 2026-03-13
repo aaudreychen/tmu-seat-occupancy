@@ -47,7 +47,7 @@ const ALL_WELLNESS_TIPS = [
   { title: "Get Natural Light When Possible", body: "Natural light improves alertness and mood. When choosing a study spot, prefer seats near windows or well-lit areas over dim corners." },
 ];
 
-const TIPS_PER_PAGE = 12;
+const TIPS_PER_PAGE = 6;
 
 function shuffleArray<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -180,7 +180,8 @@ export default function App() {
     }).sort((a, b) => (b.capacity || 0) - (a.capacity || 0));
   }, [data, minCapacity, suggestedFloor]);
 
-  const suggestedRoomKey = suggestedRooms.map((r: any) => r.room_id).join(",");
+  const suggestedRoomKey = useMemo(() => suggestedRooms.map((r: any) => r.room_id).join(","), [suggestedRooms]);
+  
   useEffect(() => {
     if (page !== "suggested" || !suggestedRoomKey) return;
     const hour = parseInt(suggestedTime.split(":")[0], 10);
@@ -193,7 +194,6 @@ export default function App() {
       .finally(() => setInsightsLoading(false));
   }, [page, building, suggestedTime, selectedDate, suggestedRoomKey]);
 
-  // Updated NavItem helper for Header
   const NavItem = ({ p, label }: { p: Page; label: string }) => (
     <button onClick={() => setPage(p)} style={{ 
       background: page === p ? "#374151" : "transparent", 
@@ -237,13 +237,6 @@ export default function App() {
             {availableCapacities.map((cap) => <option key={cap} value={cap}>{cap} Seats</option>)}
           </select>
         </div>
-      </div>
-      <div style={{ marginBottom: "24px", display: "flex", gap: "10px" }}>
-        {(["ALL", "AVAILABLE", "UNAVAILABLE"] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} style={{ padding: "10px 20px", borderRadius: "20px", border: "1px solid #ccc", fontWeight: 600, cursor: "pointer", background: filter === f ? (f === "AVAILABLE" ? "#16A34A" : f === "UNAVAILABLE" ? "#B91C1C" : "#2563EB") : "white", color: filter === f ? "white" : "black" }}>
-            {f.charAt(0) + f.slice(1).toLowerCase()}
-          </button>
-        ))}
       </div>
       {loading ? <p>Loading results...</p> : filteredSeats.length === 0 ? <p style={{ color: "#6B7280" }}>No room data found for this selection.</p> : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -289,12 +282,7 @@ export default function App() {
               const m = (totalMins % 60).toString().padStart(2, "0");
               return `${h}:${m}`;
             }).map((t) => (
-              <option key={t} value={t}>{(() => {
-                const [h, m] = t.split(":").map(Number);
-                const ampm = h < 12 ? "AM" : "PM";
-                const h12 = h % 12 || 12;
-                return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
-              })()}</option>
+              <option key={t} value={t}>{t}</option>
             ))}
           </select>
         </div>
@@ -337,7 +325,7 @@ export default function App() {
                   <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: insight.color || "#6B7280", fontWeight: 600 }}>
                     <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: `radial-gradient(circle, ${insight.color} 0%, transparent 70%)`, animation: "pulse 2s infinite" }} />
                     <span style={{ fontSize: "14px" }}>
-                      {insight.color === "#15803D" ? "🟢" : insight.color === "#65A30D" ? "🟡" : insight.color === "#D97706" ? "🟠" : insight.color === "#DC2626" ? "🔴" : "⚪"}
+                      {insight.color === "#15803D" ? "🟢" : insight.color === "#65A30D" ? "🟡" : insight.color === "#D97706" ? "🟠" : "🔴"}
                     </span>
                     {insight.label}
                     {insight.pct !== null && insight.pct !== undefined && (
@@ -391,7 +379,7 @@ export default function App() {
             <label style={labelStyle}>Building</label>
             <select value={historyBuilding} onChange={(e) => setHistoryBuilding(e.target.value)} style={inputStyle}>
               <option value="ALL">All Buildings</option>
-              {buildings.map((b) => (<option key={b} value={b}>{buildingMap[b]}</option>))}
+              {buildings.map((b) => <option key={b} value={b}>{buildingMap[b]}</option>)}
             </select>
           </div>
           <div style={{ ...filterWrap, position: "relative" }}>
@@ -451,35 +439,6 @@ export default function App() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div style={{ background: "white", borderRadius: "14px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.07)", overflowX: "auto" }}>
-              <h2 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: 700 }}>Monthly Breakdown</h2>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                <thead>
-                  <tr style={{ borderBottom: "2px solid #F3F4F6" }}>
-                    {["Month", "Avg Occupancy", "Records", "Avg Duration"].map((h) => (
-                      <th key={h} style={{ padding: "8px 12px", textAlign: "left", color: "#6B7280", fontWeight: 600, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...historyData].reverse().map((row, i) => (
-                    <tr key={row.month} style={{ borderBottom: "1px solid #F9FAFB", background: i % 2 === 0 ? "white" : "#FAFAFA" }}>
-                      <td style={{ padding: "10px 12px", fontWeight: 600, color: "#111827" }}>{fmtMonth(row.month)}</td>
-                      <td style={{ padding: "10px 12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <div style={{ width: "72px", height: "6px", background: "#E5E7EB", borderRadius: "3px", overflow: "hidden" }}>
-                            <div style={{ width: `${Math.round((row.avg_occupancy ?? 0) * 100)}%`, height: "100%", borderRadius: "3px", background: (row.avg_occupancy ?? 0) > 0.75 ? "#EF4444" : (row.avg_occupancy ?? 0) > 0.4 ? "#F59E0B" : "#10B981" }} />
-                          </div>
-                          <span>{Math.round((row.avg_occupancy ?? 0) * 100)}%</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: "10px 12px", color: "#374151" }}>{row.total_records?.toLocaleString()}</td>
-                      <td style={{ padding: "10px 12px", color: "#374151" }}>{fmtDur(row.avg_duration_h)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </>
         )}
       </div>
@@ -490,27 +449,13 @@ export default function App() {
     <div style={{ display: "flex", flexDirection: "column", fontFamily: "Arial", minHeight: "100vh", background: "#F3F4F6" }}>
       <style>{`@keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.5; } }`}</style>
       
-      {/* --- HORIZONTAL NAVIGATION HEADER --- */}
       <header style={{ 
-        width: "100%", 
-        padding: "15px 40px", 
-        background: "#111827", 
-        color: "white", 
-        display: "flex", 
-        alignItems: "center", 
-        justifyContent: "space-between",
-        position: "sticky",
-        top: 0,
-        zIndex: 1000,
-        boxShadow: "0 2px 10px rgba(0,0,0,0.2)"
+        width: "100%", padding: "15px 40px", background: "#111827", color: "white", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 1000, boxShadow: "0 2px 10px rgba(0,0,0,0.2)"
       }}>
-        
-        {/* Branding (Left) */}
         <div style={{ flex: 1 }}>
           <h2 style={{ fontSize: "20px", margin: 0, fontWeight: 800, letterSpacing: "0.5px" }}>TMU Seats</h2>
         </div>
 
-        {/* Navigation Links (Middle - Side by Side) */}
         <nav style={{ display: "flex", gap: "10px", flex: 2, justifyContent: "center" }}>
           <NavItem p="seats"     label="Available Seats" />
           <NavItem p="suggested" label="Suggested Rooms" />
@@ -518,20 +463,17 @@ export default function App() {
           <NavItem p="history"   label="Historical Logs" />
         </nav>
 
-        {/* Right side status indicator */}
         <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
           <div style={{ padding: "8px 20px", background: "white", color: "#111827", borderRadius: "20px", fontSize: "12px", fontWeight: 700 }}>Live Data</div>
         </div>
       </header>
 
-      {/* --- MAIN CONTENT AREA --- */}
       <main style={{ flex: 1, padding: "40px", maxWidth: "1200px", margin: "0 auto", width: "100%" }}>
         {page === "seats"     && <SeatsPage />}
         {page === "suggested" && <SuggestedPage />}
         {page === "wellness"  && <WellnessPage />}
         {page === "history"   && <HistoryPage />}
       </main>
-
     </div>
   );
 }
