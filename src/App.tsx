@@ -47,6 +47,49 @@ const ALL_WELLNESS_TIPS = [
   { title: "Get Natural Light When Possible", body: "Natural light improves alertness and mood. When choosing a study spot, prefer seats near windows or well-lit areas over dim corners." },
 ];
 
+const ERGONOMIC_EXERCISES = [
+  "Neck Tilts: Gently tilt your head toward each shoulder for 10 seconds.",
+  "Chin Tucks: Pull your chin straight back to stretch the back of your neck.",
+  "Shoulder Rolls: Roll your shoulders backward in a circular motion 10 times.",
+  "Wrist Flexion: Gently pull your hand down at the wrist and hold for 15 seconds.",
+  "Wrist Extension: Gently pull your hand up at the wrist and hold for 15 seconds.",
+  "Seated Spinal Twist: Twist your torso to the right, then left, using your chair for support.",
+  "Chest Opener: Interlace fingers behind your back and lift your arms slightly.",
+  "Ankle Circles: Rotate each ankle clockwise and counter-clockwise 10 times.",
+  "Leg Extensions: Straighten one leg under your desk and hold for 5 seconds.",
+  "Eye Palming: Rub hands together and cup them over closed eyes for 30 seconds.",
+  "Standing Calf Stretch: Stand and push one heel into the floor with a straight leg.",
+  "Overhead Reach: Reach both arms toward the ceiling and stretch upward.",
+  "Forward Fold: Reach for your toes while seated to stretch your lower back.",
+  "Ear-to-Shoulder: Stretch the side of your neck by dropping your ear toward your shoulder.",
+  "Hand Squeezes: Make a tight fist, then splay your fingers wide.",
+  "Upper Back Stretch: Push your arms forward and round your upper back.",
+  "Cross-Body Arm Stretch: Pull one arm across your chest and hold.",
+  "Desk Press: Push your palms down on the desk and straighten your arms.",
+  "Tricep Stretch: Reach one arm overhead and drop your hand behind your neck.",
+  "Glute Squeeze: Squeeze your glutes for 5 seconds while sitting, then release.",
+  "Hip Marches: Lift each knee toward the ceiling while seated.",
+  "Wall Sit: If near a wall, hold a seated position against it for 20 seconds.",
+  "Finger Fans: Spread your fingers as wide as possible, then relax.",
+  "Shoulder Shrugs: Lift shoulders to ears, hold, then drop them completely.",
+  "Looking Far: Look at an object 20 feet away for 20 seconds to reduce eye strain.",
+  "Abdominal Bracing: Tighten your core muscles for 10 seconds while breathing.",
+  "Knee-to-Chest: Pull one knee toward your chest while seated.",
+  "Side Bends: Reach one arm over your head and lean to the opposite side.",
+  "Thumb Stretch: Pull your thumb gently away from your palm.",
+  "Nose Circles: Draw small circles in the air with your nose.",
+  "Heel-Toe Raises: Alternate lifting your heels and toes off the floor.",
+  "Desk Pushups: Do 5 incline pushups using the edge of your desk.",
+  "Quad Stretch: Stand on one leg and pull your other heel toward your glutes.",
+  "Forearm Massage: Use one hand to massage the muscles of your opposite forearm.",
+  "Deep Belly Breaths: Take 3 slow breaths that expand your stomach.",
+  "Scapular Squeezes: Pull your shoulder blades together as if holding a pencil.",
+  "Palm Press: Press palms together in front of your chest like a prayer.",
+  "Wrist Rotations: Make loose fists and rotate your wrists slowly.",
+  "Lower Back Extension: Place hands on hips and lean back slightly while standing.",
+  "Walking Minute: Walk to a nearby water fountain and back."
+];
+
 const TIPS_PER_PAGE = 6;
 
 function shuffleArray<T>(arr: T[]): T[] {
@@ -69,7 +112,35 @@ const formatDuration = (hours: number) => {
 
 const labelStyle: React.CSSProperties = { fontWeight: 600, display: "block", marginBottom: "8px", whiteSpace: "nowrap", fontSize: "14px" };
 const filterWrap: React.CSSProperties = { display: "flex", flexDirection: "column" };
-const inputStyle: React.CSSProperties = { padding: "10px 14px", borderRadius: "10px", border: "1px solid #ccc", background: "white", whiteSpace: "nowrap", cursor: "pointer", fontSize: "14px" };
+
+const inputStyle: React.CSSProperties = { 
+  padding: "10px 14px", 
+  borderRadius: "10px", 
+  border: "1px solid #ccc", 
+  background: "white", 
+  whiteSpace: "nowrap", 
+  cursor: "pointer", 
+  fontSize: "14px",
+  minWidth: "150px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center"
+};
+
+const dropdownListStyle: React.CSSProperties = {
+  position: "absolute",
+  top: "105%",
+  left: 0,
+  width: "100%",
+  maxHeight: "200px",
+  overflowY: "auto",
+  background: "white",
+  border: "1px solid #ccc",
+  borderRadius: "10px",
+  zIndex: 1000,
+  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+  padding: "5px 0"
+};
 
 export default function App() {
   const [page, setPage] = useState<Page>("seats");
@@ -82,14 +153,27 @@ export default function App() {
   const [selectedFloor, setSelectedFloor] = useState<number | null>(null);
   const [showFloorPickerSeats, setShowFloorPickerSeats] = useState(false);
   const [selectedTime, setSelectedTime] = useState<string>("09:00");
-  const [selectedCapacity, setSelectedCapacity] = useState<string>("ALL");
+  const [selectedCapacity, setSelectedCapacity] = useState<number>(1);
   const [minCapacity, setMinCapacity] = useState<number>(1);
   const [suggestedFloor, setSuggestedFloor] = useState<number | null>(null);
   const [showFloorPickerSuggested, setShowFloorPickerSuggested] = useState(false);
-  const [suggestedTime, setSuggestedTime] = useState<string>("09:00");
+  
+  // Suggested time is internal state derived from system time
+  const [suggestedTime, setSuggestedTime] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes() < 30 ? "00" : "30"}`;
+  });
+
   const [roomInsights, setRoomInsights] = useState<Record<string, { label: string; color: string; pct: number | null; samples?: number }>>({});
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [wellnessTips, setWellnessTips] = useState(() => shuffleArray(ALL_WELLNESS_TIPS).slice(0, TIPS_PER_PAGE));
+
+  const [currentExercise, setCurrentExercise] = useState("Ready for a stretch?");
+
+  const [showBldgDropdown, setShowBldgDropdown] = useState(false);
+  const [showTimeDropdown, setShowTimeDropdown] = useState(false);
+  const [showCapDropdown, setShowCapDropdown] = useState(false);
+  const [showMinCapDropdown, setShowMinCapDropdown] = useState(false);
 
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -119,7 +203,11 @@ export default function App() {
       const dateStr = selectedDate.toISOString().split("T")[0];
       const params = new URLSearchParams();
       params.append("date", dateStr);
-      params.append("time", selectedTime);
+      
+      // Determine which time to send based on current page
+      const queryTime = page === "suggested" ? suggestedTime : selectedTime;
+      params.append("time", queryTime);
+      
       if (selectedFloor) params.append("floor", `F${selectedFloor}`);
       const res = await fetch(`${API_URL}/availability/${building}?${params.toString()}`);
       const json = await res.json();
@@ -132,7 +220,7 @@ export default function App() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [building, selectedDate, selectedTime, selectedFloor]);
+  useEffect(() => { fetchData(); }, [building, selectedDate, selectedTime, selectedFloor, page, suggestedTime]);
 
   const fetchHistory = async (bldg: string, endDate: Date) => {
     try {
@@ -156,12 +244,11 @@ export default function App() {
   }, [page, historyBuilding, historyEndDate]);
 
   const availableFloors = Array.from(new Set(data.map((row) => parseInt(row.floor_id?.replace("F", "") || "0")).filter((n) => !isNaN(n) && n > 0))).sort((a, b) => a - b);
-  const availableCapacities = Array.from(new Set(data.map((row) => Number(row.capacity)))).sort((a, b) => a - b);
 
   const filteredSeats = data.filter((row) => {
     if (filter === "AVAILABLE" && row.occupied !== 0) return false;
     if (filter === "UNAVAILABLE" && row.occupied !== 1) return false;
-    if (selectedCapacity !== "ALL" && row.capacity !== Number(selectedCapacity)) return false;
+    if (row.capacity < selectedCapacity) return false;
     return true;
   });
 
@@ -180,26 +267,54 @@ export default function App() {
     }).sort((a, b) => (b.capacity || 0) - (a.capacity || 0));
   }, [data, minCapacity, suggestedFloor]);
 
+  const rankedRooms = useMemo(() => {
+    if (!suggestedRooms.length) return suggestedRooms;
+    return [...suggestedRooms].sort((a, b) => {
+      const ia = roomInsights[a.room_id];
+      const ib = roomInsights[b.room_id];
+      const vacA = ia?.pct != null ? 100 - ia.pct : null;
+      const vacB = ib?.pct != null ? 100 - ib.pct : null;
+      if (vacA !== null && vacB !== null) {
+        if (vacA !== vacB) return vacB - vacA;
+        return (b.capacity || 0) - (a.capacity || 0);
+      }
+      if (vacA !== null) return -1;
+      if (vacB !== null) return 1;
+      return (b.capacity || 0) - (a.capacity || 0);
+    });
+  }, [suggestedRooms, roomInsights]);
+
   const suggestedRoomKey = useMemo(() => suggestedRooms.map((r: any) => r.room_id).join(","), [suggestedRooms]);
   
   useEffect(() => {
     if (page !== "suggested" || !suggestedRoomKey) return;
     const hour = parseInt(suggestedTime.split(":")[0], 10);
-    const day = selectedDate.getDay() === 0 ? 6 : selectedDate.getDay() - 1;
+    const day = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
     setInsightsLoading(true);
     fetch(`${API_URL}/room-insights/${building}?hour=${hour}&day=${day}&rooms=${encodeURIComponent(suggestedRoomKey)}`)
       .then((r) => r.json())
       .then((json) => setRoomInsights(typeof json === "object" ? json : {}))
       .catch(() => setRoomInsights({}))
       .finally(() => setInsightsLoading(false));
-  }, [page, building, suggestedTime, selectedDate, suggestedRoomKey]);
+  }, [page, building, suggestedTime, suggestedRoomKey]);
 
   const NavItem = ({ p, label }: { p: Page; label: string }) => (
-    <button onClick={() => setPage(p)} style={{ 
-      background: page === p ? "#374151" : "transparent", 
-      border: page === p ? "1px solid #4B5563" : "1px solid transparent",
-      color: "white", padding: "8px 16px", borderRadius: "20px", cursor: "pointer", fontSize: "13px", fontWeight: 500, transition: "0.2s" 
-    }}>
+    <button 
+      onClick={() => setPage(p)} 
+      style={{ 
+        background: page === p ? "#374151" : "transparent", 
+        border: "1px solid",
+        borderColor: page === p ? "#4B5563" : "transparent",
+        color: "white", 
+        padding: "10px 22px", 
+        borderRadius: "25px", 
+        cursor: "pointer", 
+        fontSize: "14px", 
+        fontWeight: 600, 
+        transition: "background 0.2s ease, border-color 0.2s ease",
+        whiteSpace: "nowrap"
+      }}
+    >
       {label}
     </button>
   );
@@ -208,36 +323,73 @@ export default function App() {
     <div>
       <h1 style={{ marginBottom: "24px" }}>Available Seats</h1>
       <div style={{ display: "flex", gap: "16px", marginBottom: "24px", alignItems: "flex-end", flexWrap: "wrap" }}>
-        <div style={filterWrap}>
+        
+        <div style={{ ...filterWrap, position: "relative" }}>
           <label style={labelStyle}>Building</label>
-          <select value={building} onChange={(e) => { setSelectedFloor(null); setSelectedCapacity("ALL"); setBuilding(e.target.value); }} style={inputStyle}>
-            {buildings.map((b) => <option key={b} value={b}>{buildingMap[b]}</option>)}
-          </select>
+          <button onClick={() => setShowBldgDropdown(!showBldgDropdown)} style={inputStyle}>
+            {buildingMap[building]} <span>▼</span>
+          </button>
+          {showBldgDropdown && (
+            <div style={dropdownListStyle}>
+              {buildings.map(b => (
+                <div key={b} onClick={() => { setBuilding(b); setShowBldgDropdown(false); setSelectedFloor(null); }} style={{ padding: "10px", cursor: "pointer", fontSize: "14px" }}>{buildingMap[b]}</div>
+              ))}
+            </div>
+          )}
         </div>
+
         <div style={{ ...filterWrap, position: "relative" }}>
           <label style={labelStyle}>Date</label>
           <button onClick={() => { setShowCalendar(!showCalendar); setShowFloorPickerSeats(false); }} style={inputStyle}>{selectedDate.toDateString()}</button>
-          {showCalendar && (<div style={{ position: "absolute", top: "100%", zIndex: 100 }}><Calendar selectedDate={selectedDate} onSelectDate={(d) => { setSelectedDate(d); setShowCalendar(false); }} onClose={() => setShowCalendar(false)} /></div>)}
+          {showCalendar && (<div style={{ position: "absolute", top: "100%", zIndex: 100 }}><Calendar selectedDate={selectedDate} onSelectDate={(d: any) => { setSelectedDate(d); setShowCalendar(false); }} onClose={() => setShowCalendar(false)} /></div>)}
         </div>
-        <div style={filterWrap}>
+
+        <div style={{ ...filterWrap, position: "relative" }}>
           <label style={labelStyle}>Time</label>
-          <select value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)} style={inputStyle}>
-            {Array.from({ length: 16 }, (_, i) => { const hour = 9 + Math.floor(i / 2); const minute = i % 2 === 0 ? "00" : "30"; const time = `${hour.toString().padStart(2, "0")}:${minute}`; return <option key={time} value={time}>{time}</option>; })}
-          </select>
+          <button onClick={() => setShowTimeDropdown(!showTimeDropdown)} style={inputStyle}>
+            {selectedTime} <span>▼</span>
+          </button>
+          {showTimeDropdown && (
+            <div style={dropdownListStyle}>
+              {Array.from({ length: 48 }, (_, i) => {
+                const h = Math.floor(i / 2);
+                const m = i % 2 === 0 ? "00" : "30";
+                const t = `${h.toString().padStart(2, "0")}:${m}`;
+                return <div key={t} onClick={() => { setSelectedTime(t); setShowTimeDropdown(false); }} style={{ padding: "10px", cursor: "pointer", fontSize: "14px" }}>{t}</div>;
+              })}
+            </div>
+          )}
         </div>
+
         <div style={{ ...filterWrap, position: "relative", minWidth: "140px" }}>
           <label style={labelStyle}>Floor</label>
           <button onClick={() => { setShowFloorPickerSeats(!showFloorPickerSeats); setShowCalendar(false); }} style={inputStyle}>{selectedFloor ? `Floor ${selectedFloor}` : "All Floors"}</button>
-          {showFloorPickerSeats && (<FloorPicker selectedFloor={selectedFloor || 0} onSelectFloor={(n) => { setSelectedFloor(n === 0 ? null : n); setShowFloorPickerSeats(false); }} onClose={() => setShowFloorPickerSeats(false)} availableFloors={availableFloors} />)}
+          {showFloorPickerSeats && (<FloorPicker selectedFloor={selectedFloor || 0} onSelectFloor={(n: any) => { setSelectedFloor(n === 0 ? null : n); setShowFloorPickerSeats(false); }} onClose={() => setShowFloorPickerSeats(false)} availableFloors={availableFloors} />)}
         </div>
-        <div style={filterWrap}>
+
+        <div style={{ ...filterWrap, position: "relative" }}>
           <label style={labelStyle}>Capacity</label>
-          <select value={selectedCapacity} onChange={(e) => setSelectedCapacity(e.target.value)} style={inputStyle}>
-            <option value="ALL">All Capacities</option>
-            {availableCapacities.map((cap) => <option key={cap} value={cap}>{cap} Seats</option>)}
-          </select>
+          <button onClick={() => setShowCapDropdown(!showCapDropdown)} style={inputStyle}>
+            {selectedCapacity}+ Seats <span>▼</span>
+          </button>
+          {showCapDropdown && (
+            <div style={dropdownListStyle}>
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(cap => (
+                <div key={cap} onClick={() => { setSelectedCapacity(cap); setShowCapDropdown(false); }} style={{ padding: "10px", cursor: "pointer", fontSize: "14px" }}>{cap}+ Seats</div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
+      <div style={{ marginBottom: "24px", display: "flex", gap: "10px" }}>
+        {(["ALL", "AVAILABLE", "UNAVAILABLE"] as const).map((f) => (
+          <button key={f} onClick={() => setFilter(f)} style={{ padding: "10px 20px", borderRadius: "20px", border: "1px solid #ccc", fontWeight: 600, cursor: "pointer", background: filter === f ? (f === "AVAILABLE" ? "#16A34A" : f === "UNAVAILABLE" ? "#B91C1C" : "#2563EB") : "white", color: filter === f ? "white" : "black" }}>
+            {f.charAt(0) + f.slice(1).toLowerCase()}
+          </button>
+        ))}
+      </div>
+
       {loading ? <p>Loading results...</p> : filteredSeats.length === 0 ? <p style={{ color: "#6B7280" }}>No room data found for this selection.</p> : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {filteredSeats.map((row, i) => {
@@ -260,80 +412,71 @@ export default function App() {
   const SuggestedPage = () => (
     <div>
       <h1 style={{ marginBottom: "8px" }}>Suggested Rooms</h1>
-      <p style={{ color: "#6B7280", marginBottom: "24px" }}>Rooms that are currently free, sorted by capacity.</p>
+      <p style={{ color: "#6B7280", marginBottom: "24px" }}>Rooms currently free, ranked by vacancy likelihood.</p>
       <div style={{ display: "flex", gap: "16px", marginBottom: "30px", alignItems: "flex-end", flexWrap: "wrap" }}>
-        <div style={filterWrap}>
-          <label style={labelStyle}>Building</label>
-          <select value={building} onChange={(e) => { setSuggestedFloor(null); setBuilding(e.target.value); }} style={inputStyle}>
-            {buildings.map((b) => <option key={b} value={b}>{buildingMap[b]}</option>)}
-          </select>
-        </div>
+        
         <div style={{ ...filterWrap, position: "relative" }}>
-          <label style={labelStyle}>Date</label>
-          <button onClick={() => { setShowCalendar(!showCalendar); setShowFloorPickerSuggested(false); }} style={inputStyle}>{selectedDate.toDateString()}</button>
-          {showCalendar && (<div style={{ position: "absolute", top: "100%", zIndex: 100 }}><Calendar selectedDate={selectedDate} onSelectDate={(d) => { setSelectedDate(d); setShowCalendar(false); }} onClose={() => setShowCalendar(false)} /></div>)}
+          <label style={labelStyle}>Building</label>
+          <button onClick={() => setShowBldgDropdown(!showBldgDropdown)} style={inputStyle}>
+            {buildingMap[building]} <span>▼</span>
+          </button>
+          {showBldgDropdown && (
+            <div style={dropdownListStyle}>
+              {buildings.map(b => (
+                <div key={b} onClick={() => { setBuilding(b); setShowBldgDropdown(false); setSuggestedFloor(null); }} style={{ padding: "10px", cursor: "pointer", fontSize: "14px" }}>{buildingMap[b]}</div>
+              ))}
+            </div>
+          )}
         </div>
-        <div style={filterWrap}>
-          <label style={labelStyle}>Time</label>
-          <select value={suggestedTime} onChange={(e) => setSuggestedTime(e.target.value)} style={inputStyle}>
-            {Array.from({ length: 29 }, (_, i) => {
-              const totalMins = 7 * 60 + i * 30;
-              const h = Math.floor(totalMins / 60).toString().padStart(2, "0");
-              const m = (totalMins % 60).toString().padStart(2, "0");
-              return `${h}:${m}`;
-            }).map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        </div>
-        <div style={filterWrap}>
+
+        {/* TIME PICKER REMOVED FROM SUGGESTED PAGE */}
+
+        <div style={{ ...filterWrap, position: "relative" }}>
           <label style={labelStyle}>Min. Capacity</label>
-          <select value={minCapacity} onChange={(e) => setMinCapacity(Number(e.target.value))} style={inputStyle}>
-            {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => <option key={n} value={n}>{n}+ people</option>)}
-          </select>
+          <button onClick={() => setShowMinCapDropdown(!showMinCapDropdown)} style={inputStyle}>
+            {minCapacity}+ people <span>▼</span>
+          </button>
+          {showMinCapDropdown && (
+            <div style={dropdownListStyle}>
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
+                <div key={n} onClick={() => { setMinCapacity(n); setShowMinCapDropdown(false); }} style={{ padding: "10px", cursor: "pointer", fontSize: "14px" }}>{n}+ people</div>
+              ))}
+            </div>
+          )}
         </div>
+
         <div style={{ ...filterWrap, position: "relative", minWidth: "140px" }}>
           <label style={labelStyle}>Floor</label>
           <button onClick={() => { setShowFloorPickerSuggested(!showFloorPickerSuggested); setShowCalendar(false); }} style={inputStyle}>{suggestedFloor ? `Floor ${suggestedFloor}` : "All Floors"}</button>
           {showFloorPickerSuggested && (<FloorPicker selectedFloor={suggestedFloor || 0} onSelectFloor={(n) => { setSuggestedFloor(n === suggestedFloor ? null : n); setShowFloorPickerSuggested(false); }} onClose={() => setShowFloorPickerSuggested(false)} availableFloors={availableFloors} />)}
         </div>
       </div>
-      {loading ? <p>Loading...</p> : suggestedRooms.length === 0 ? (
+      {loading ? <p>Loading...</p> : rankedRooms.length === 0 ? (
         <div style={{ padding: "40px", textAlign: "center", background: "white", borderRadius: "12px", color: "#6B7280" }}>No available rooms match your criteria.</div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "16px" }}>
-          {suggestedRooms.map((row: any, i: number) => {
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
+          {rankedRooms.map((row: any, i: number) => {
             const insight = roomInsights[row.room_id];
             return (
-              <div key={i} style={{ background: "white", borderRadius: "14px", padding: "20px", boxShadow: i === 0 ? "0 0 0 2px #16A34A, 0 4px 12px rgba(0,0,0,0.08)" : "0 2px 6px rgba(0,0,0,0.06)", position: "relative", display: "flex", flexDirection: "column" }}>
+              <div key={i} style={{ background: "white", borderRadius: "14px", padding: "24px", boxShadow: i === 0 ? "0 0 0 2px #16A34A, 0 4px 12px rgba(0,0,0,0.08)" : "0 2px 6px rgba(0,0,0,0.06)", position: "relative" }}>
                 {i === 0 && <div style={{ position: "absolute", top: "14px", right: "14px", background: "#DCFCE7", color: "#15803D", fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px" }}>Best Match</div>}
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
                   <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#16A34A" }} />
-                  <span style={{ fontWeight: 700, fontSize: "16px" }}>Room {row.room_id}</span>
+                  <span style={{ fontWeight: 700, fontSize: "18px" }}>Room {row.room_id}</span>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "5px", fontSize: "14px", color: "#374151" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "15px", color: "#374151" }}>
                   <div><strong>Floor:</strong> {row.floor_id}</div>
                   <div><strong>Capacity:</strong> {row.capacity} people</div>
-                  {row.booking_duration > 0 && <div><strong>Typical booking:</strong> {formatDuration(row.booking_duration)}</div>}
                 </div>
-                {insightsLoading ? (
-                  <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: "#E5E7EB", animation: "pulse 1.2s ease-in-out infinite" }} />
-                    <div style={{ height: "12px", width: "160px", borderRadius: "6px", background: "#E5E7EB", animation: "pulse 1.2s ease-in-out infinite" }} />
-                  </div>
-                ) : insight ? (
-                  <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: insight.color || "#6B7280", fontWeight: 600 }}>
-                    <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: `radial-gradient(circle, ${insight.color} 0%, transparent 70%)`, animation: "pulse 2s infinite" }} />
-                    <span style={{ fontSize: "14px" }}>
+                {insight ? (
+                  <div style={{ marginTop: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: insight.color || "#6B7280", fontWeight: 600 }}>
+                    <span style={{ fontSize: "16px" }}>
                       {insight.color === "#15803D" ? "🟢" : insight.color === "#65A30D" ? "🟡" : insight.color === "#D97706" ? "🟠" : "🔴"}
                     </span>
-                    {insight.label}
-                    {insight.pct !== null && insight.pct !== undefined && (
-                      <span style={{ color: "#9CA3AF", fontWeight: 400 }}>({insight.pct}%)</span>
-                    )}
+                    {insight.label} ({insight.pct}%)
                   </div>
                 ) : null}
-                <div style={{ marginTop: "14px", background: "#F0FDF4", color: "#15803D", fontWeight: 600, fontSize: "13px", padding: "6px 12px", borderRadius: "8px", textAlign: "center" }}>Available</div>
+                <div style={{ marginTop: "18px", background: "#F0FDF4", color: "#15803D", fontWeight: 700, fontSize: "13px", padding: "8px", borderRadius: "8px", textAlign: "center" }}>Available</div>
               </div>
             );
           })}
@@ -344,14 +487,39 @@ export default function App() {
 
   const WellnessPage = () => (
     <div>
-      <h1 style={{ marginBottom: "8px" }}>Study Wellness Tips</h1>
-      <p style={{ color: "#6B7280", marginBottom: "6px" }}>Finding a seat is only half the battle.</p>
-      <p style={{ color: "#9CA3AF", fontSize: "13px", marginBottom: "28px" }}>Navigate away and come back for a fresh set of tips.</p>
+      <div style={{ marginBottom: "32px", padding: "20px", background: "white", borderRadius: "14px", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "16px", border: "1px solid #E5E7EB" }}>
+        <div style={{ fontSize: "14px", color: "#6B7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Quick Study Stretch</div>
+        <div style={{ fontSize: "18px", fontWeight: 700, color: "#111827", lineHeight: "1.4" }}>{currentExercise}</div>
+        <button 
+          onClick={() => {
+            const rand = Math.floor(Math.random() * ERGONOMIC_EXERCISES.length);
+            setCurrentExercise(ERGONOMIC_EXERCISES[rand]);
+          }}
+          style={{ 
+            padding: "12px 24px", 
+            background: "#111827", 
+            color: "white", 
+            border: "none", 
+            borderRadius: "10px", 
+            fontWeight: 700, 
+            cursor: "pointer",
+            width: "fit-content",
+            transition: "0.2s"
+          }}
+          onMouseOver={(e) => e.currentTarget.style.background = "#374151"}
+          onMouseOut={(e) => e.currentTarget.style.background = "#111827"}
+        >
+          Generate New Stretch
+        </button>
+      </div>
+
+      <h1 style={{ marginBottom: "24px" }}>Study Wellness Tips</h1>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
         {wellnessTips.map((tip, i) => (
-          <div key={i} style={{ background: "white", borderRadius: "14px", padding: "22px", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "8px" }}>
-            <div style={{ fontWeight: 700, fontSize: "15px", color: "#111827" }}>{tip.title}</div>
-            <div style={{ fontSize: "13px", color: "#6B7280", lineHeight: "1.6" }}>{tip.body}</div>
+          <div key={i} style={{ background: "white", borderRadius: "14px", padding: "26px", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ fontWeight: 700, fontSize: "16px", color: "#111827" }}>{tip.title}</div>
+            <div style={{ fontSize: "14px", color: "#6B7280", lineHeight: "1.6" }}>{tip.body}</div>
           </div>
         ))}
       </div>
@@ -362,101 +530,91 @@ export default function App() {
     const shortMonth = (m: string) => { const [y, mo] = m.split("-"); const d = new Date(parseInt(y), parseInt(mo) - 1, 1); return d.toLocaleDateString("en-CA", { month: "short" }) + " '" + y.slice(2); };
     const fmtMonth = (m: string) => { const [y, mo] = m.split("-"); const d = new Date(parseInt(y), parseInt(mo) - 1, 1); return d.toLocaleDateString("en-CA", { month: "long", year: "numeric" }); };
     const fmtDur = (h: number | null) => { if (h == null) return "—"; const mins = Math.round(h * 60); const hh = Math.floor(mins / 60); const mm = mins % 60; return hh > 0 ? `${hh}h ${mm}m` : `${mm}m`; };
-    const startDate = new Date(historyEndDate);
-    startDate.setDate(startDate.getDate() - 90);
+
     const totalRecords = historyData.reduce((s, r) => s + (r.total_records || 0), 0);
     const avgOcc = historyData.length ? historyData.reduce((s, r) => s + (r.avg_occupancy ?? 0), 0) / historyData.length : 0;
     const peak = [...historyData].sort((a, b) => (b.avg_occupancy ?? 0) - (a.avg_occupancy ?? 0))[0];
 
     return (
-      <div style={{ maxWidth: "960px" }}>
-        <h1 style={{ marginBottom: "4px" }}>Historical Logs</h1>
-        <p style={{ color: "#6B7280", marginTop: 0, marginBottom: "24px", fontSize: "14px" }}>
-          Showing 3 months of data: {startDate.toLocaleDateString("en-CA", { month: "short", year: "numeric" })} → {historyEndDate.toLocaleDateString("en-CA", { month: "short", year: "numeric" })}
-        </p>
-        <div style={{ display: "flex", gap: "16px", marginBottom: "24px", alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div style={filterWrap}>
-            <label style={labelStyle}>Building</label>
-            <select value={historyBuilding} onChange={(e) => setHistoryBuilding(e.target.value)} style={inputStyle}>
-              <option value="ALL">All Buildings</option>
-              {buildings.map((b) => <option key={b} value={b}>{buildingMap[b]}</option>)}
-            </select>
-          </div>
-          <div style={{ ...filterWrap, position: "relative" }}>
-            <label style={labelStyle}>End Date</label>
-            <button onClick={() => setShowHistoryCalendar(!showHistoryCalendar)} style={inputStyle}>{historyEndDate.toDateString()}</button>
-            {showHistoryCalendar && (
-              <div style={{ position: "absolute", top: "100%", zIndex: 100 }}>
-                <Calendar selectedDate={historyEndDate} onSelectDate={(d: any) => { setHistoryEndDate(d); setShowHistoryCalendar(false); }} onClose={() => setShowHistoryCalendar(false)} />
-              </div>
-            )}
-          </div>
+      <div style={{ maxWidth: "1100px" }}>
+        <h1 style={{ marginBottom: "24px" }}>Historical Logs</h1>
+        <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "30px" }}>
+          {[
+            { label: "Months Tracked", value: historyData.length.toString(), color: "#3B82F6" },
+            { label: "Total Records", value: totalRecords.toLocaleString(), color: "#8B5CF6" },
+            { label: "Avg Occupancy", value: `${Math.round(avgOcc * 100)}%`, color: "#F59E0B" },
+            { label: "Peak Month", value: peak ? fmtMonth(peak.month) : "—", color: "#EF4444" },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{ background: "white", borderRadius: "12px", padding: "22px", borderLeft: `5px solid ${color}`, flex: 1, minWidth: "180px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+              <div style={{ fontSize: "12px", color: "#6B7280", fontWeight: 700, textTransform: "uppercase" }}>{label}</div>
+              <div style={{ fontSize: "28px", fontWeight: 900, marginTop: "8px" }}>{value}</div>
+            </div>
+          ))}
         </div>
-        {historyLoading ? <p>Loading history...</p> : historyData.length === 0 ? (
-          <div style={{ background: "white", borderRadius: "12px", padding: "48px", textAlign: "center", color: "#9CA3AF" }}>No data found for this selection.</div>
-        ) : (
-          <>
-            <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "24px" }}>
-              {[
-                { label: "Months Tracked", value: historyData.length.toString(), color: "#3B82F6" },
-                { label: "Total Records", value: totalRecords.toLocaleString(), color: "#8B5CF6" },
-                { label: "Avg Occupancy", value: `${Math.round(avgOcc * 100)}%`, color: "#F59E0B" },
-                { label: "Peak Month", value: peak ? fmtMonth(peak.month) : "—", color: "#EF4444" },
-              ].map(({ label, value, color }) => (
-                <div key={label} style={{ background: "white", borderRadius: "12px", padding: "18px 22px", borderLeft: `4px solid ${color}`, flex: 1, minWidth: "140px", boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
-                  <div style={{ fontSize: "11px", color: "#6B7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, color: "#111827", marginTop: "6px" }}>{value}</div>
-                </div>
+        
+        <div style={{ background: "white", borderRadius: "14px", padding: "30px", marginBottom: "30px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+          <h2 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "20px" }}>Monthly Avg Occupancy Rate</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={historyData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="month" tickFormatter={shortMonth} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={(v) => `${Math.round(v * 100)}%`} axisLine={false} tickLine={false} />
+              <Tooltip />
+              <Area type="monotone" dataKey="avg_occupancy" stroke="#3B82F6" strokeWidth={3} fill="#3B82F6" fillOpacity={0.1} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div style={{ background: "white", borderRadius: "14px", padding: "30px", marginBottom: "30px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+          <h2 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "20px" }}>Monthly Record Volume</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={historyData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="month" tickFormatter={shortMonth} axisLine={false} tickLine={false} />
+              <YAxis axisLine={false} tickLine={false} />
+              <Tooltip />
+              <Bar dataKey="total_records" fill="#8B5CF6" radius={[6, 6, 0, 0]} barSize={40} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div style={{ background: "white", borderRadius: "14px", padding: "30px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+          <h2 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "20px" }}>Monthly Breakdown</h2>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ borderBottom: "2px solid #F3F4F6", textAlign: "left" }}>
+                <th style={{ padding: "12px", color: "#6B7280", fontSize: "12px", fontWeight: 700, textTransform: "uppercase" }}>Month</th>
+                <th style={{ padding: "12px", color: "#6B7280", fontSize: "12px", fontWeight: 700, textTransform: "uppercase" }}>Avg Occupancy</th>
+                <th style={{ padding: "12px", color: "#6B7280", fontSize: "12px", fontWeight: 700, textTransform: "uppercase" }}>Records</th>
+                <th style={{ padding: "12px", color: "#6B7280", fontSize: "12px", fontWeight: 700, textTransform: "uppercase" }}>Avg Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...historyData].reverse().map((row) => (
+                <tr key={row.month} style={{ borderBottom: "1px solid #F9FAFB" }}>
+                  <td style={{ padding: "12px", fontWeight: 600 }}>{fmtMonth(row.month)}</td>
+                  <td style={{ padding: "12px" }}>{Math.round((row.avg_occupancy ?? 0) * 100)}%</td>
+                  <td style={{ padding: "12px" }}>{row.total_records?.toLocaleString()}</td>
+                  <td style={{ padding: "12px" }}>{fmtDur(row.avg_duration_h)}</td>
+                </tr>
               ))}
-            </div>
-            <div style={{ background: "white", borderRadius: "14px", padding: "24px", marginBottom: "20px", boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
-              <h2 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: 700 }}>Monthly Avg Occupancy Rate</h2>
-              <ResponsiveContainer width="100%" height={260}>
-                <AreaChart data={historyData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="histOccGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                  <XAxis dataKey="month" tickFormatter={shortMonth} tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                  <YAxis tickFormatter={(v) => `${Math.round(v * 100)}%`} domain={[0, 1]} tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} width={44} />
-                  <Tooltip formatter={(v: any) => [`${Math.round(v * 100)}%`, "Avg Occupancy"]} labelFormatter={(l: any) => fmtMonth(l)} contentStyle={{ borderRadius: "8px", fontSize: "13px" }} />
-                  <Area type="monotone" dataKey="avg_occupancy" stroke="#3B82F6" strokeWidth={2.5} fill="url(#histOccGrad)" dot={false} activeDot={{ r: 5 }} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-            <div style={{ background: "white", borderRadius: "14px", padding: "24px", marginBottom: "20px", boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
-              <h2 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: 700 }}>Monthly Record Volume</h2>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={historyData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-                  <XAxis dataKey="month" tickFormatter={shortMonth} tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} width={44} />
-                  <Tooltip formatter={(v: any) => [v.toLocaleString(), "Records"]} labelFormatter={(l: any) => fmtMonth(l)} contentStyle={{ borderRadius: "8px", fontSize: "13px" }} />
-                  <Bar dataKey="total_records" fill="#8B5CF6" radius={[4, 4, 0, 0]} maxBarSize={24} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </>
-        )}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", fontFamily: "Arial", minHeight: "100vh", background: "#F3F4F6" }}>
-      <style>{`@keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.5; } }`}</style>
-      
       <header style={{ 
-        width: "100%", padding: "15px 40px", background: "#111827", color: "white", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 1000, boxShadow: "0 2px 10px rgba(0,0,0,0.2)"
+        width: "100%", padding: "18px 45px", background: "#111827", color: "white", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 1000, boxShadow: "0 4px 15px rgba(0,0,0,0.2)"
       }}>
         <div style={{ flex: 1 }}>
-          <h2 style={{ fontSize: "20px", margin: 0, fontWeight: 800, letterSpacing: "0.5px" }}>TMU Seats</h2>
+          <h2 style={{ fontSize: "22px", margin: 0, fontWeight: 900, letterSpacing: "0.5px" }}>TMU Seats</h2>
         </div>
 
-        <nav style={{ display: "flex", gap: "10px", flex: 2, justifyContent: "center" }}>
+        <nav style={{ display: "flex", gap: "12px", flex: 2, justifyContent: "center", alignItems: "center" }}>
           <NavItem p="seats"     label="Available Seats" />
           <NavItem p="suggested" label="Suggested Rooms" />
           <NavItem p="wellness"  label="Wellness Tips" />
@@ -464,11 +622,11 @@ export default function App() {
         </nav>
 
         <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
-          <div style={{ padding: "8px 20px", background: "white", color: "#111827", borderRadius: "20px", fontSize: "12px", fontWeight: 700 }}>Live Data</div>
+          <div style={{ padding: "8px 24px", background: "white", color: "#111827", borderRadius: "25px", fontSize: "13px", fontWeight: 800 }}>Live Data</div>
         </div>
       </header>
 
-      <main style={{ flex: 1, padding: "40px", maxWidth: "1200px", margin: "0 auto", width: "100%" }}>
+      <main style={{ flex: 1, padding: "45px", maxWidth: "1350px", margin: "0 auto", width: "100%" }}>
         {page === "seats"     && <SeatsPage />}
         {page === "suggested" && <SuggestedPage />}
         {page === "wellness"  && <WellnessPage />}
