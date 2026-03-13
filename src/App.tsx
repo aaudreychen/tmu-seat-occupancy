@@ -22,7 +22,7 @@ const buildingMap: Record<string, string> = {
 };
 const buildings = Object.keys(buildingMap);
 
-type Page = "seats" | "suggested" | "wellness" | "history";
+type Page = "seats" | "suggested" | "wellness" | "history" | "maps";
 
 const ALL_WELLNESS_TIPS = [
   { title: "Use the Pomodoro Technique", body: "Study for 25 minutes, then take a 5-minute break. After 4 cycles take a longer 15-30 min break. This keeps focus sharp and prevents burnout." },
@@ -89,6 +89,13 @@ const ERGONOMIC_EXERCISES = [
   "Lower Back Extension: Place hands on hips and lean back slightly while standing.",
   "Walking Minute: Walk to a nearby water fountain and back."
 ];
+
+const BUILDING_FLOOR_MAPS: Record<string, number[]> = {
+  StudentLearningCenter: [5, 7, 8],
+  TedRogersSchoolofManagement: [2, 3],
+  Library: [5, 6, 7, 8, 9],
+  EngineeringBuilding: [1, 2, 3, 4, 5, 6, 7]
+};
 
 const TIPS_PER_PAGE = 6;
 
@@ -158,8 +165,7 @@ export default function App() {
   const [suggestedFloor, setSuggestedFloor] = useState<number | null>(null);
   const [showFloorPickerSuggested, setShowFloorPickerSuggested] = useState(false);
   
-  // Suggested time is internal state derived from system time
-  const [suggestedTime, setSuggestedTime] = useState<string>(() => {
+  const [suggestedTime] = useState<string>(() => {
     const now = new Date();
     return `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes() < 30 ? "00" : "30"}`;
   });
@@ -203,11 +209,8 @@ export default function App() {
       const dateStr = selectedDate.toISOString().split("T")[0];
       const params = new URLSearchParams();
       params.append("date", dateStr);
-      
-      // Determine which time to send based on current page
       const queryTime = page === "suggested" ? suggestedTime : selectedTime;
       params.append("time", queryTime);
-      
       if (selectedFloor) params.append("floor", `F${selectedFloor}`);
       const res = await fetch(`${API_URL}/availability/${building}?${params.toString()}`);
       const json = await res.json();
@@ -429,8 +432,6 @@ export default function App() {
           )}
         </div>
 
-        {/* TIME PICKER REMOVED FROM SUGGESTED PAGE */}
-
         <div style={{ ...filterWrap, position: "relative" }}>
           <label style={labelStyle}>Min. Capacity</label>
           <button onClick={() => setShowMinCapDropdown(!showMinCapDropdown)} style={inputStyle}>
@@ -484,6 +485,92 @@ export default function App() {
       )}
     </div>
   );
+
+  const InteractiveMapPage = () => {
+    const floorList = BUILDING_FLOOR_MAPS[building] || [];
+    const [currentMapFloor, setCurrentMapFloor] = useState<number>(floorList[0] || 0);
+    const [showMapFloorDropdown, setShowMapFloorDropdown] = useState(false);
+
+    useEffect(() => {
+      if (!floorList.includes(currentMapFloor)) {
+        setCurrentMapFloor(floorList[0] || 0);
+      }
+    }, [building, floorList, currentMapFloor]);
+
+    const floorRooms = data.filter(row => parseInt(row.floor_id?.replace("F", "") || "0") === currentMapFloor);
+
+    return (
+      <div>
+        <h1 style={{ marginBottom: "8px" }}>Interactive Floor Map</h1>
+        <p style={{ color: "#6B7280", marginBottom: "24px" }}>Visual representation of room availability across campus.</p>
+        
+        <div style={{ display: "flex", gap: "16px", marginBottom: "30px", alignItems: "flex-end" }}>
+          <div style={{ ...filterWrap, position: "relative" }}>
+            <label style={labelStyle}>Building</label>
+            <button onClick={() => setShowBldgDropdown(!showBldgDropdown)} style={inputStyle}>
+              {buildingMap[building]} <span>▼</span>
+            </button>
+            {showBldgDropdown && (
+              <div style={dropdownListStyle}>
+                {buildings.map(b => (
+                  <div key={b} onClick={() => { setBuilding(b); setShowBldgDropdown(false); }} style={{ padding: "10px", cursor: "pointer", fontSize: "14px" }}>{buildingMap[b]}</div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ ...filterWrap, position: "relative" }}>
+            <label style={labelStyle}>Floor</label>
+            <button onClick={() => setShowMapFloorDropdown(!showMapFloorDropdown)} style={inputStyle}>
+              Floor {currentMapFloor} <span>▼</span>
+            </button>
+            {showMapFloorDropdown && (
+              <div style={dropdownListStyle}>
+                {floorList.map(f => (
+                  <div key={f} onClick={() => { setCurrentMapFloor(f); setShowMapFloorDropdown(false); }} style={{ padding: "10px", cursor: "pointer", fontSize: "14px" }}>Floor {f}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ background: "white", padding: "40px", borderRadius: "14px", border: "1px solid #E5E7EB", display: "flex", gap: "40px" }}>
+          <div style={{ flex: 1, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: "15px" }}>
+            {floorRooms.length === 0 ? (
+              <div style={{ gridColumn: "1/-1", textAlign: "center", color: "#9CA3AF", padding: "20px" }}>No room data for this floor.</div>
+            ) : (
+              floorRooms.map(room => (
+                <div key={room.room_id} style={{ 
+                  background: room.occupied === 0 ? "#DCFCE7" : "#FEE2E2",
+                  border: `2px solid ${room.occupied === 0 ? "#16A34A" : "#EF4444"}`,
+                  borderRadius: "8px",
+                  height: "80px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "0.2s"
+                }}>
+                  <div style={{ fontWeight: 800, color: room.occupied === 0 ? "#15803D" : "#B91C1C" }}>{room.room_id}</div>
+                  <div style={{ fontSize: "11px", color: room.occupied === 0 ? "#16A34A" : "#EF4444" }}>{room.capacity} seats</div>
+                </div>
+              ))
+            )}
+          </div>
+          
+          <div style={{ width: "200px", background: "#F9FAFB", padding: "20px", borderRadius: "10px", height: "fit-content" }}>
+            <h3 style={{ fontSize: "14px", marginBottom: "15px" }}>Map Legend</h3>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", fontSize: "13px" }}>
+              <div style={{ width: "16px", height: "16px", background: "#DCFCE7", border: "2px solid #16A34A", borderRadius: "4px" }} /> Available
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px" }}>
+              <div style={{ width: "16px", height: "16px", background: "#FEE2E2", border: "2px solid #EF4444", borderRadius: "4px" }} /> Occupied
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const WellnessPage = () => (
     <div>
@@ -611,12 +698,13 @@ export default function App() {
         width: "100%", padding: "18px 45px", background: "#111827", color: "white", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 1000, boxShadow: "0 4px 15px rgba(0,0,0,0.2)"
       }}>
         <div style={{ flex: 1 }}>
-          <h2 style={{ fontSize: "22px", margin: 0, fontWeight: 900, letterSpacing: "0.5px" }}>TMU Seats</h2>
+          <h2 style={{ fontSize: "22px", margin: 0, fontWeight: 900, letterSpacing: "0.5px" }}>FindMySeat TMU</h2>
         </div>
 
-        <nav style={{ display: "flex", gap: "12px", flex: 2, justifyContent: "center", alignItems: "center" }}>
+        <nav style={{ display: "flex", gap: "12px", flex: 3, justifyContent: "center", alignItems: "center" }}>
           <NavItem p="seats"     label="Available Seats" />
           <NavItem p="suggested" label="Suggested Rooms" />
+          <NavItem p="maps"      label="Interactive Maps" />
           <NavItem p="wellness"  label="Wellness Tips" />
           <NavItem p="history"   label="Historical Logs" />
         </nav>
@@ -629,6 +717,7 @@ export default function App() {
       <main style={{ flex: 1, padding: "45px", maxWidth: "1350px", margin: "0 auto", width: "100%" }}>
         {page === "seats"     && <SeatsPage />}
         {page === "suggested" && <SuggestedPage />}
+        {page === "maps"      && <InteractiveMapPage />}
         {page === "wellness"  && <WellnessPage />}
         {page === "history"   && <HistoryPage />}
       </main>
