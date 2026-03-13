@@ -118,7 +118,7 @@ const formatDuration = (hours: number) => {
 };
 
 const labelStyle: React.CSSProperties = { fontWeight: 600, display: "block", marginBottom: "8px", whiteSpace: "nowrap", fontSize: "14px" };
-const filterWrap: React.CSSProperties = { display: "flex", flexDirection: "column" };
+const filterWrap: React.CSSProperties = { display: "flex", flexDirection: "column", minWidth: "260px" };
 
 const inputStyle: React.CSSProperties = { 
   padding: "10px 14px", 
@@ -128,10 +128,12 @@ const inputStyle: React.CSSProperties = {
   whiteSpace: "nowrap", 
   cursor: "pointer", 
   fontSize: "14px",
-  minWidth: "150px",
+  width: "260px", // Increased from 220px to fit Ted Rogers School of Management
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "center"
+  alignItems: "center",
+  height: "42px",
+  overflow: "hidden"
 };
 
 const dropdownListStyle: React.CSSProperties = {
@@ -185,7 +187,6 @@ export default function App() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyBuilding, setHistoryBuilding] = useState<string>("ALL");
   const [historyEndDate, setHistoryEndDate] = useState<Date>(new Date());
-  const [showHistoryCalendar, setShowHistoryCalendar] = useState(false);
 
   useEffect(() => {
     fetch(`${API_URL}/trends/date-range`)
@@ -326,11 +327,10 @@ export default function App() {
     <div>
       <h1 style={{ marginBottom: "24px" }}>Available Seats</h1>
       <div style={{ display: "flex", gap: "16px", marginBottom: "24px", alignItems: "flex-end", flexWrap: "wrap" }}>
-        
         <div style={{ ...filterWrap, position: "relative" }}>
           <label style={labelStyle}>Building</label>
           <button onClick={() => setShowBldgDropdown(!showBldgDropdown)} style={inputStyle}>
-            {buildingMap[building]} <span>▼</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{buildingMap[building]}</span> <span>▼</span>
           </button>
           {showBldgDropdown && (
             <div style={dropdownListStyle}>
@@ -340,20 +340,18 @@ export default function App() {
             </div>
           )}
         </div>
-
         <div style={{ ...filterWrap, position: "relative" }}>
           <label style={labelStyle}>Date</label>
           <button onClick={() => { setShowCalendar(!showCalendar); setShowFloorPickerSeats(false); }} style={inputStyle}>{selectedDate.toDateString()}</button>
           {showCalendar && (<div style={{ position: "absolute", top: "100%", zIndex: 100 }}><Calendar selectedDate={selectedDate} onSelectDate={(d: any) => { setSelectedDate(d); setShowCalendar(false); }} onClose={() => setShowCalendar(false)} /></div>)}
         </div>
-
-        <div style={{ ...filterWrap, position: "relative" }}>
+        <div style={{ ...filterWrap, position: "relative", minWidth: "150px" }}>
           <label style={labelStyle}>Time</label>
-          <button onClick={() => setShowTimeDropdown(!showTimeDropdown)} style={inputStyle}>
+          <button onClick={() => setShowTimeDropdown(!showTimeDropdown)} style={{...inputStyle, width: "150px"}}>
             {selectedTime} <span>▼</span>
           </button>
           {showTimeDropdown && (
-            <div style={dropdownListStyle}>
+            <div style={{...dropdownListStyle, width: "150px"}}>
               {Array.from({ length: 48 }, (_, i) => {
                 const h = Math.floor(i / 2);
                 const m = i % 2 === 0 ? "00" : "30";
@@ -363,20 +361,18 @@ export default function App() {
             </div>
           )}
         </div>
-
         <div style={{ ...filterWrap, position: "relative", minWidth: "140px" }}>
           <label style={labelStyle}>Floor</label>
-          <button onClick={() => { setShowFloorPickerSeats(!showFloorPickerSeats); setShowCalendar(false); }} style={inputStyle}>{selectedFloor ? `Floor ${selectedFloor}` : "All Floors"}</button>
+          <button onClick={() => { setShowFloorPickerSeats(!showFloorPickerSeats); setShowCalendar(false); }} style={{...inputStyle, width: "140px"}}>{selectedFloor ? `Floor ${selectedFloor}` : "All Floors"}</button>
           {showFloorPickerSeats && (<FloorPicker selectedFloor={selectedFloor || 0} onSelectFloor={(n: any) => { setSelectedFloor(n === 0 ? null : n); setShowFloorPickerSeats(false); }} onClose={() => setShowFloorPickerSeats(false)} availableFloors={availableFloors} />)}
         </div>
-
-        <div style={{ ...filterWrap, position: "relative" }}>
+        <div style={{ ...filterWrap, position: "relative", minWidth: "150px" }}>
           <label style={labelStyle}>Capacity</label>
-          <button onClick={() => setShowCapDropdown(!showCapDropdown)} style={inputStyle}>
+          <button onClick={() => setShowCapDropdown(!showCapDropdown)} style={{...inputStyle, width: "150px"}}>
             {selectedCapacity}+ Seats <span>▼</span>
           </button>
           {showCapDropdown && (
-            <div style={dropdownListStyle}>
+            <div style={{...dropdownListStyle, width: "150px"}}>
               {[1, 2, 3, 4, 5, 6, 7, 8].map(cap => (
                 <div key={cap} onClick={() => { setSelectedCapacity(cap); setShowCapDropdown(false); }} style={{ padding: "10px", cursor: "pointer", fontSize: "14px" }}>{cap}+ Seats</div>
               ))}
@@ -384,7 +380,6 @@ export default function App() {
           )}
         </div>
       </div>
-
       <div style={{ marginBottom: "24px", display: "flex", gap: "10px" }}>
         {(["ALL", "AVAILABLE", "UNAVAILABLE"] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)} style={{ padding: "10px 20px", borderRadius: "20px", border: "1px solid #ccc", fontWeight: 600, cursor: "pointer", background: filter === f ? (f === "AVAILABLE" ? "#16A34A" : f === "UNAVAILABLE" ? "#B91C1C" : "#2563EB") : "white", color: filter === f ? "white" : "black" }}>
@@ -392,7 +387,6 @@ export default function App() {
           </button>
         ))}
       </div>
-
       {loading ? <p>Loading results...</p> : filteredSeats.length === 0 ? <p style={{ color: "#6B7280" }}>No room data found for this selection.</p> : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {filteredSeats.map((row, i) => {
@@ -417,11 +411,10 @@ export default function App() {
       <h1 style={{ marginBottom: "8px" }}>Suggested Rooms</h1>
       <p style={{ color: "#6B7280", marginBottom: "24px" }}>Rooms currently free, ranked by vacancy likelihood.</p>
       <div style={{ display: "flex", gap: "16px", marginBottom: "30px", alignItems: "flex-end", flexWrap: "wrap" }}>
-        
         <div style={{ ...filterWrap, position: "relative" }}>
           <label style={labelStyle}>Building</label>
           <button onClick={() => setShowBldgDropdown(!showBldgDropdown)} style={inputStyle}>
-            {buildingMap[building]} <span>▼</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{buildingMap[building]}</span> <span>▼</span>
           </button>
           {showBldgDropdown && (
             <div style={dropdownListStyle}>
@@ -431,24 +424,22 @@ export default function App() {
             </div>
           )}
         </div>
-
-        <div style={{ ...filterWrap, position: "relative" }}>
+        <div style={{ ...filterWrap, position: "relative", minWidth: "150px" }}>
           <label style={labelStyle}>Min. Capacity</label>
-          <button onClick={() => setShowMinCapDropdown(!showMinCapDropdown)} style={inputStyle}>
+          <button onClick={() => setShowMinCapDropdown(!showMinCapDropdown)} style={{...inputStyle, width: "150px"}}>
             {minCapacity}+ people <span>▼</span>
           </button>
           {showMinCapDropdown && (
-            <div style={dropdownListStyle}>
+            <div style={{...dropdownListStyle, width: "150px"}}>
               {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
                 <div key={n} onClick={() => { setMinCapacity(n); setShowMinCapDropdown(false); }} style={{ padding: "10px", cursor: "pointer", fontSize: "14px" }}>{n}+ people</div>
               ))}
             </div>
           )}
         </div>
-
         <div style={{ ...filterWrap, position: "relative", minWidth: "140px" }}>
           <label style={labelStyle}>Floor</label>
-          <button onClick={() => { setShowFloorPickerSuggested(!showFloorPickerSuggested); setShowCalendar(false); }} style={inputStyle}>{suggestedFloor ? `Floor ${suggestedFloor}` : "All Floors"}</button>
+          <button onClick={() => { setShowFloorPickerSuggested(!showFloorPickerSuggested); setShowCalendar(false); }} style={{...inputStyle, width: "140px"}}>{suggestedFloor ? `Floor ${suggestedFloor}` : "All Floors"}</button>
           {showFloorPickerSuggested && (<FloorPicker selectedFloor={suggestedFloor || 0} onSelectFloor={(n) => { setSuggestedFloor(n === suggestedFloor ? null : n); setShowFloorPickerSuggested(false); }} onClose={() => setShowFloorPickerSuggested(false)} availableFloors={availableFloors} />)}
         </div>
       </div>
@@ -503,12 +494,11 @@ export default function App() {
       <div>
         <h1 style={{ marginBottom: "8px" }}>Interactive Floor Map</h1>
         <p style={{ color: "#6B7280", marginBottom: "24px" }}>Visual representation of room availability across campus.</p>
-        
         <div style={{ display: "flex", gap: "16px", marginBottom: "30px", alignItems: "flex-end" }}>
           <div style={{ ...filterWrap, position: "relative" }}>
             <label style={labelStyle}>Building</label>
             <button onClick={() => setShowBldgDropdown(!showBldgDropdown)} style={inputStyle}>
-              {buildingMap[building]} <span>▼</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{buildingMap[building]}</span> <span>▼</span>
             </button>
             {showBldgDropdown && (
               <div style={dropdownListStyle}>
@@ -518,7 +508,6 @@ export default function App() {
               </div>
             )}
           </div>
-
           <div style={{ ...filterWrap, position: "relative" }}>
             <label style={labelStyle}>Floor</label>
             <button onClick={() => setShowMapFloorDropdown(!showMapFloorDropdown)} style={inputStyle}>
@@ -533,7 +522,6 @@ export default function App() {
             )}
           </div>
         </div>
-
         <div style={{ background: "white", padding: "40px", borderRadius: "14px", border: "1px solid #E5E7EB", display: "flex", gap: "40px" }}>
           <div style={{ flex: 1, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: "15px" }}>
             {floorRooms.length === 0 ? (
@@ -557,7 +545,6 @@ export default function App() {
               ))
             )}
           </div>
-          
           <div style={{ width: "200px", background: "#F9FAFB", padding: "20px", borderRadius: "10px", height: "fit-content" }}>
             <h3 style={{ fontSize: "14px", marginBottom: "15px" }}>Map Legend</h3>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", fontSize: "13px" }}>
@@ -599,9 +586,7 @@ export default function App() {
           Generate New Stretch
         </button>
       </div>
-
       <h1 style={{ marginBottom: "24px" }}>Study Wellness Tips</h1>
-
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
         {wellnessTips.map((tip, i) => (
           <div key={i} style={{ background: "white", borderRadius: "14px", padding: "26px", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -617,7 +602,6 @@ export default function App() {
     const shortMonth = (m: string) => { const [y, mo] = m.split("-"); const d = new Date(parseInt(y), parseInt(mo) - 1, 1); return d.toLocaleDateString("en-CA", { month: "short" }) + " '" + y.slice(2); };
     const fmtMonth = (m: string) => { const [y, mo] = m.split("-"); const d = new Date(parseInt(y), parseInt(mo) - 1, 1); return d.toLocaleDateString("en-CA", { month: "long", year: "numeric" }); };
     const fmtDur = (h: number | null) => { if (h == null) return "—"; const mins = Math.round(h * 60); const hh = Math.floor(mins / 60); const mm = mins % 60; return hh > 0 ? `${hh}h ${mm}m` : `${mm}m`; };
-
     const totalRecords = historyData.reduce((s, r) => s + (r.total_records || 0), 0);
     const avgOcc = historyData.length ? historyData.reduce((s, r) => s + (r.avg_occupancy ?? 0), 0) / historyData.length : 0;
     const peak = [...historyData].sort((a, b) => (b.avg_occupancy ?? 0) - (a.avg_occupancy ?? 0))[0];
@@ -638,7 +622,6 @@ export default function App() {
             </div>
           ))}
         </div>
-        
         <div style={{ background: "white", borderRadius: "14px", padding: "30px", marginBottom: "30px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
           <h2 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "20px" }}>Monthly Avg Occupancy Rate</h2>
           <ResponsiveContainer width="100%" height={300}>
@@ -651,7 +634,6 @@ export default function App() {
             </AreaChart>
           </ResponsiveContainer>
         </div>
-
         <div style={{ background: "white", borderRadius: "14px", padding: "30px", marginBottom: "30px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
           <h2 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "20px" }}>Monthly Record Volume</h2>
           <ResponsiveContainer width="100%" height={300}>
@@ -664,7 +646,6 @@ export default function App() {
             </BarChart>
           </ResponsiveContainer>
         </div>
-
         <div style={{ background: "white", borderRadius: "14px", padding: "30px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
           <h2 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "20px" }}>Monthly Breakdown</h2>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -700,7 +681,6 @@ export default function App() {
         <div style={{ flex: 1 }}>
           <h2 style={{ fontSize: "22px", margin: 0, fontWeight: 900, letterSpacing: "0.5px" }}>FindMySeat TMU</h2>
         </div>
-
         <nav style={{ display: "flex", gap: "12px", flex: 3, justifyContent: "center", alignItems: "center" }}>
           <NavItem p="seats"     label="Available Seats" />
           <NavItem p="suggested" label="Suggested Rooms" />
@@ -708,12 +688,10 @@ export default function App() {
           <NavItem p="wellness"  label="Wellness Tips" />
           <NavItem p="history"   label="Historical Logs" />
         </nav>
-
         <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
           <div style={{ padding: "8px 24px", background: "white", color: "#111827", borderRadius: "25px", fontSize: "13px", fontWeight: 800 }}>Live Data</div>
         </div>
       </header>
-
       <main style={{ flex: 1, padding: "45px", maxWidth: "1350px", margin: "0 auto", width: "100%" }}>
         {page === "seats"     && <SeatsPage />}
         {page === "suggested" && <SuggestedPage />}
