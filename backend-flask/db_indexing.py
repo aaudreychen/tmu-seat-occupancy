@@ -4,7 +4,7 @@ client = MongoClient("mongodb+srv://audreychen:peanuts@occupancydata.ie1evjc.mon
 db = client.OccupancyData
 
 def create_indexes():
-    print("Creating indexes for faster loading...")
+    print("starting indexing")
     
     db.occupancy_data.create_index([("building", 1), ("timestamp_iso", -1)])
     
@@ -12,7 +12,7 @@ def create_indexes():
     
     db.trends.create_index([("month", -1)])
 
-    print("Success! Database is now indexed.")
+    print("Database is now indexed.")
 
 if __name__ == "__main__":
     create_indexes()

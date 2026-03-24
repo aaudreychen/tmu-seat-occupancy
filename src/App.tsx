@@ -1,10 +1,14 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { Calendar } from "./components/Calendar";
 import { FloorPicker } from "./components/FloorPicker";
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+
+mapboxgl.accessToken = 'pk.eyJ1IjoiZmluZG15c2VhdHRtdSIsImEiOiJjbW4yYnI2Z3oweHkzMndwbm9ya2U2aHRmIn0.gAqfaio9WuNQOLbNf8sxTA';
 
 declare global {
   interface ImportMeta {
@@ -239,14 +243,11 @@ export default function App() {
       const dateStr = formatLocalDate(selectedDate);
       const params = new URLSearchParams();
       params.append("date", dateStr);
-      const now = new Date();
-      const currentTime = clampToDatasetTime(now);
-      const queryTime = page === "suggested" ? currentTime : selectedTime;
-      params.append("time", queryTime);
-      if (page === "seats" && selectedFloor) {
-        params.append("floor", `F${selectedFloor}`);
-      }
-      const res = await fetch(`${API_URL}/availability/${building}?${params.toString()}`);
+      params.append("time", selectedTime);
+      
+      const targetBldg = page === "maps" ? "ALL" : building;
+      
+      const res = await fetch(`${API_URL}/availability/${targetBldg}?${params.toString()}`);
       const json = await res.json();
       setData(Array.isArray(json) ? json : []);
     } catch (err) {
@@ -527,66 +528,101 @@ export default function App() {
   );
 
   const InteractiveMapPage = () => {
-    const floorList = BUILDING_FLOOR_MAPS[building] || [];
-    const [currentMapFloor, setCurrentMapFloor] = useState<number>(floorList[0] || 0);
-    const [showMapFloorDropdown, setShowMapFloorDropdown] = useState(false);
+    const mapContainer = useRef<HTMLDivElement>(null);
+    const map = useRef<mapboxgl.Map | null>(null);
+    const markersRef = useRef<mapboxgl.Marker[]>([]);
+
+    const BOOKING_URLS: Record<string, string> = {
+      StudentLearningCenter: "https://torontomu.libcal.com/spaces?lid=1234",
+      Library: "https://library.torontomu.ca/services/reserve-a-room/",
+      TedRogersSchoolofManagement: "https://www.torontomu.ca/tedrogersschool/success/room-booking/",
+      EngineeringBuilding: "https://www.torontomu.ca/engineering-architectural-science/current-students/undergraduate/room-bookings/"
+    };
+
+    const buildingCoords: Record<string, [number, number]> = {
+      StudentLearningCenter: [-79.3819, 43.6578],
+      EngineeringBuilding: [-79.3774, 43.6582],
+      Library: [-79.3792, 43.6585],
+      TedRogersSchoolofManagement: [-79.3821, 43.6554]
+    };
+
+    const displayNames: Record<string, string> = {
+      StudentLearningCenter: "Student Learning Centre (SLC)",
+      EngineeringBuilding: "George Vari Engineering and Computing Centre (ENG)",
+      TedRogersSchoolofManagement: "Ted Rogers School of Management (TRS)",
+      Library: "Library (LIB)"
+    };
+
+    const getAvailableCount = (bldgKey: string) => {
+      const shortCodes: Record<string, string> = {
+        StudentLearningCenter: "SLC",
+        EngineeringBuilding: "ENG",
+        Library: "LIB",
+        TedRogersSchoolofManagement: "TRS"
+      };
+      const code = shortCodes[bldgKey];
+      return data.filter(row => {
+        const matches = row.building === bldgKey || row.building === code || row.room_id?.startsWith(code);
+        return matches && row.occupied === 0;
+      }).length;
+    };
+
     useEffect(() => {
-      if (!floorList.includes(currentMapFloor)) {
-        setCurrentMapFloor(floorList[0] || 0);
-      }
-    }, [building, floorList, currentMapFloor]);
-    const floorRooms = data.filter((row) => parseInt(row.floor_id?.replace("F", "") || "0") === currentMapFloor);
+      if (map.current) return;
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current!,
+        style: 'mapbox://styles/mapbox/light-v10',
+        center: [-79.3792, 43.6575],
+        zoom: 16,
+        pitch: 45
+      });
+    }, []);
+
+    useEffect(() => {
+      if (!map.current) return;
+      markersRef.current.forEach(m => m.remove());
+      markersRef.current = [];
+
+      Object.keys(buildingCoords).forEach((key) => {
+        const count = getAvailableCount(key);
+        const fullName = displayNames[key] || key;
+
+        const el = document.createElement('div');
+        el.className = 'marker';
+        el.style.cursor = 'pointer';
+        el.innerHTML = `
+          <div style="background: #0047AB; color: white; padding: 12px 18px; border-radius: 30px; font-weight: 800; border: 3px solid white; box-shadow: 0 8px 15px rgba(0,0,0,0.3); text-align: center; min-width: 160px; transition: transform 0.2s;">
+            <div style="font-size: 11px; opacity: 0.9; text-transform: uppercase; margin-bottom: 4px; line-height: 1.2;">
+              ${fullName}
+            </div>
+            <div style="font-size: 18px;">${count} Available</div>
+          </div>
+        `;
+        el.addEventListener('click', () => window.open(BOOKING_URLS[key], '_blank'));
+
+        
+        const marker = new mapboxgl.Marker({
+          element: el,
+          anchor: key === 'EngineeringBuilding' ? 'left' : 'center', // Indent ENG to the right
+          offset: key === 'EngineeringBuilding' ? [20, 0] : [0, 0]   // Add 20px of extra spacing
+        })
+
+          .setLngLat(buildingCoords[key] as [number, number])
+          .addTo(map.current!);
+        
+        markersRef.current.push(marker);
+      });
+    }, [data, selectedTime]);
+
     return (
       <div>
-        <h1 style={{ marginBottom: "8px" }}>Interactive Floor Map</h1>
-        <p style={{ color: "#6B7280", marginBottom: "24px" }}>Visual representation of room availability across campus.</p>
-        <div style={{ display: "flex", gap: "16px", marginBottom: "30px", alignItems: "flex-end" }}>
-          <div style={{ ...filterWrap, position: "relative" }}>
-            <label style={labelStyle}>Building</label>
-            <button onClick={() => { setShowBldgDropdown(!showBldgDropdown); setShowMapFloorDropdown(false); }} style={inputStyle}>
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{buildingMap[building]}</span> <span>▼</span>
-            </button>
-            {showBldgDropdown && (
-              <div style={dropdownListStyle}>
-                {buildings.map(b => (
-                  <div key={b} onClick={() => { setBuilding(b); setShowBldgDropdown(false); }} style={{ padding: "10px", cursor: "pointer", fontSize: "14px" }}>{buildingMap[b]}</div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div style={{ ...filterWrap, position: "relative" }}>
-            <label style={labelStyle}>Floor</label>
-            <button onClick={() => { setShowMapFloorDropdown(!showMapFloorDropdown); setShowBldgDropdown(false); }} style={inputStyle}>Floor {currentMapFloor} <span>▼</span></button>
-            {showMapFloorDropdown && (
-              <div style={dropdownListStyle}>
-                {floorList.map(f => (
-                  <div key={f} onClick={() => { setCurrentMapFloor(f); setShowMapFloorDropdown(false); }} style={{ padding: "10px", cursor: "pointer", fontSize: "14px" }}>Floor {f}</div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        <div style={{ background: "white", padding: "40px", borderRadius: "14px", border: "1px solid #E5E7EB", display: "flex", gap: "40px" }}>
-          <div style={{ flex: 1, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: "15px" }}>
-            {floorRooms.length === 0 ? (
-              <div style={{ gridColumn: "1/-1", textAlign: "center", color: "#9CA3AF", padding: "20px" }}>No room data for this floor.</div>
-            ) : (
-              floorRooms.map((room, idx) => (
-                <div key={room.full_room_id || `${room.floor_id}-${room.room_id}-${idx}`} style={{ background: room.occupied === 0 ? "#DCFCE7" : "#FEE2E2", border: `2px solid ${room.occupied === 0 ? "#16A34A" : "#EF4444"}`, borderRadius: "8px", height: "80px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", transition: "0.2s" }}>
-                  <div style={{ fontWeight: 800, color: room.occupied === 0 ? "#15803D" : "#B91C1C" }}>{room.room_id}</div>
-                  <div style={{ fontSize: "11px", color: room.occupied === 0 ? "#16A34A" : "#EF4444" }}>{room.capacity} seats</div>
-                </div>
-              ))
-            )}
-          </div>
-          <div style={{ width: "200px", background: "#F9FAFB", padding: "20px", borderRadius: "10px", height: "fit-content" }}>
-            <h3 style={{ fontSize: "14px", marginBottom: "15px" }}>Map Legend</h3>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", fontSize: "13px" }}>
-              <div style={{ width: "16px", height: "16px", background: "#DCFCE7", border: "2px solid #16A34A", borderRadius: "4px" }} /> Available
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px" }}>
-              <div style={{ width: "16px", height: "16px", background: "#FEE2E2", border: "2px solid #EF4444", borderRadius: "4px" }} /> Occupied
-            </div>
+        <h1 style={{ marginBottom: "8px" }}>Live Campus Map</h1>
+        <p style={{ color: "#6B7280", marginBottom: "24px" }}>Click a building bubble to open the official TMU booking portal.</p>
+        <div style={{ position: 'relative', width: '100%', height: '650px', borderRadius: '16px', overflow: 'hidden', border: '1px solid #E5E7EB' }}>
+          <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
+          <div style={{ position: 'absolute', bottom: '20px', left: '20px', background: 'white', padding: '12px', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)', fontSize: '13px' }}>
+            <strong>Map Key</strong>
+            <div style={{ marginTop: '5px' }}><span style={{ color: '#0047AB' }}>●</span> Click to Book Room</div>
           </div>
         </div>
       </div>
@@ -620,14 +656,12 @@ export default function App() {
     const processedData = useMemo(() => {
       const seen = new Set();
       const uniqueMonths: any[] = [];
-      
       for (const row of historyData) {
         if (!seen.has(row.month)) {
           seen.add(row.month);
           uniqueMonths.push(row);
         }
       }
-      
       return uniqueMonths.slice(0, 3);
     }, [historyData]);
 
@@ -716,7 +750,7 @@ export default function App() {
                 <tbody>
                   {[...processedData].reverse().map((row) => (
                     <tr key={row.month} style={{ borderBottom: "1px solid #F9FAFB" }}>
-                      <td style={{ padding: "12px", fontWeight: 600 }}>{fmtMonth(row.month)}</td>
+                      <td style={{ padding: "12px", fontWeight: 600 }}>{shortMonth(row.month)}</td>
                       <td style={{ padding: "12px" }}>{Math.round((row.avg_occupancy ?? 0) * 100)}%</td>
                       <td style={{ padding: "12px" }}>{row.total_records?.toLocaleString()}</td>
                       <td style={{ padding: "12px" }}>{fmtDur(row.avg_duration_h)}</td>
