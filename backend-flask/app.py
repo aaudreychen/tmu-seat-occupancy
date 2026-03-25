@@ -281,6 +281,35 @@ def health():
         "collections": building_collections()
     })
 
+@app.route("/book", methods=["POST"])
+def book_room():
+    try:
+        data = request.json
+
+        building = data.get("building")
+        room_id = data.get("room_id")
+        timestamp = data.get("timestamp_iso")
+
+        if not building or not room_id:
+            return jsonify({"error": "Missing data"}), 400
+
+        # Mark room as occupied
+        db[building].update_one(
+            {
+                "room_id": room_id,
+                "timestamp_iso": timestamp
+            },
+            {
+                "$set": {
+                    "occupied": 1,
+                    "booking_duration": 1  # example (1 hour)
+                }
+            }
+        )
+
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 # ----------------------------------------------------
 # Execution
 # ----------------------------------------------------

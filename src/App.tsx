@@ -26,7 +26,7 @@ const buildingMap: Record<string, string> = {
 };
 const buildings = Object.keys(buildingMap);
 
-type Page = "seats" | "suggested" | "wellness" | "history" | "maps";
+type Page = "seats" | "suggested" | "wellness" | "history" | "maps" | "booking";
 
 const ALL_WELLNESS_TIPS = [
   { title: "Use the Pomodoro Technique", body: "Study for 25 minutes, then take a 5-minute break. After 4 cycles take a longer 15-30 min break. This keeps focus sharp and prevents burnout." },
@@ -186,6 +186,10 @@ const dropdownListStyle: React.CSSProperties = {
 
 export default function App() {
   const [page, setPage] = useState<Page>("seats");
+
+// ===== BOOKING FEATURE =====
+const [selectedBuildingForBooking, setSelectedBuildingForBooking] = useState<string | null>(null);
+
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [building, setBuilding] = useState<string>(buildings[0]);
@@ -237,7 +241,28 @@ export default function App() {
     if (page === "wellness") setWellnessTips(shuffleArray(ALL_WELLNESS_TIPS).slice(0, TIPS_PER_PAGE));
   }, [page]);
 
-  const fetchData = async () => {
+  
+  // ===== BOOKING FEATURE =====
+  const handleBooking = async (room: any) => {
+    try {
+      await fetch(`${API_URL}/book`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(room)
+      });
+
+      alert("Room booked!");
+      fetchData();
+      setPage("seats");
+    } catch (err) {
+      console.error(err);
+      alert("Booking failed");
+    }
+  };
+
+const fetchData = async () => {
     try {
       setLoading(true);
       const dateStr = formatLocalDate(selectedDate);
@@ -321,11 +346,18 @@ export default function App() {
       const vacB = ib?.pct != null ? 100 - ib.pct : null;
       if (vacA !== null && vacB !== null) {
         if (vacA !== vacB) return vacB - vacA;
-        return (b.capacity || 0) - (a.capacity || 0);
+        
+  // ===== BOOKING FEATURE =====
+
+
+  return (b.capacity || 0) - (a.capacity || 0);
       }
       if (vacA !== null) return -1;
       if (vacB !== null) return 1;
-      return (b.capacity || 0) - (a.capacity || 0);
+      
+
+
+  return (b.capacity || 0) - (a.capacity || 0);
     });
   }, [suggestedRooms, roomInsights]);
 
@@ -435,7 +467,9 @@ export default function App() {
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {filteredSeats.map((row, i) => {
             const ts = new Date(row.timestamp_iso);
-            return (
+            
+
+  return (
               <div key={row.full_room_id ? `${row.full_room_id}-${row.timestamp_iso}` : i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px", background: "white", borderRadius: "12px", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
                 <div>
                   <div style={{ fontWeight: 700 }}>Room {row.room_id} — Floor {row.floor_id}</div>
@@ -498,7 +532,9 @@ export default function App() {
             {rankedRooms.map((row: any, i: number) => {
               const insightKey = row.full_room_id || `${row.floor_id}-${row.room_id}`;
               const insight = roomInsights[insightKey];
-              return (
+              
+
+  return (
                 <div key={insightKey} style={{ background: "white", borderRadius: "14px", padding: "24px", boxShadow: i === 0 ? "0 0 0 2px #16A34A, 0 4px 12px rgba(0,0,0,0.08)" : "0 2px 6px rgba(0,0,0,0.06)", position: "relative" }}>
                   {i === 0 && <div style={{ position: "absolute", top: "14px", right: "14px", background: "#DCFCE7", color: "#15803D", fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "6px" }}>Best Match</div>}
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
@@ -598,7 +634,10 @@ export default function App() {
             <div style="font-size: 18px;">${count} Available</div>
           </div>
         `;
-        el.addEventListener('click', () => window.open(BOOKING_URLS[key], '_blank'));
+        el.addEventListener('click', () => {
+          setSelectedBuildingForBooking(key);
+          setPage("booking");
+        });
 
         
         const marker = new mapboxgl.Marker({
@@ -614,7 +653,10 @@ export default function App() {
       });
     }, [data, selectedTime]);
 
-    return (
+    
+
+
+  return (
       <div>
         <h1 style={{ marginBottom: "8px" }}>Live Campus Map</h1>
         <p style={{ color: "#6B7280", marginBottom: "24px" }}>Click a building bubble to open the official TMU booking portal.</p>
@@ -669,7 +711,10 @@ export default function App() {
     const avgOcc = processedData.length ? processedData.reduce((s, r) => s + (r.avg_occupancy ?? 0), 0) / processedData.length : 0;
     const peak = [...processedData].sort((a, b) => (b.avg_occupancy ?? 0) - (a.avg_occupancy ?? 0))[0];
 
-    return (
+    
+
+
+  return (
       <div style={{ maxWidth: "1100px" }}>
         <h1 style={{ marginBottom: "24px" }}>Historical Logs</h1>
         <div style={{ display: "flex", gap: "16px", marginBottom: "24px", alignItems: "flex-end", flexWrap: "wrap" }}>
@@ -765,6 +810,194 @@ export default function App() {
     );
   };
 
+  
+  // ===== BOOKING FEATURE =====
+ const BookingPage = () => {
+  if (!selectedBuildingForBooking) return <p>No building selected.</p>;
+
+  const [localFloor, setLocalFloor] = useState<number | null>(null);
+  const [localCapacity, setLocalCapacity] = useState<number>(1);
+
+  const [showFloorPicker, setShowFloorPicker] = useState(false);
+  const [showCapDropdown, setShowCapDropdown] = useState(false);
+
+  // 🔥 dynamic floors
+  const availableFloors = Array.from(
+    new Set(
+      data
+        .filter(
+          (r: any) =>
+            r.building === selectedBuildingForBooking ||
+            r.building_id === selectedBuildingForBooking
+        )
+        .map((r: any) =>
+          parseInt(r.floor_id?.replace("F", "") || "0")
+        )
+        .filter((n: number) => !isNaN(n) && n > 0)
+    )
+  ).sort((a, b) => a - b);
+
+  const rooms = data.filter((r: any) => {
+    if (
+      !(
+        r.building === selectedBuildingForBooking ||
+        r.building_id === selectedBuildingForBooking
+      )
+    )
+      return false;
+
+    if (r.occupied !== 0) return false;
+
+    if (localFloor) {
+      const f = parseInt(r.floor_id?.replace("F", "") || "0");
+      if (f !== localFloor) return false;
+    }
+
+    if ((r.capacity || 0) < localCapacity) return false;
+
+    return true;
+  });
+
+  return (
+    <div>
+      <h1 style={{ marginBottom: "24px" }}>
+        Book a Room — {buildingMap[selectedBuildingForBooking]}
+      </h1>
+
+      {/* 🔥 FILTER BAR */}
+      <div
+        style={{
+          display: "flex",
+          gap: "16px",
+          marginBottom: "24px",
+          alignItems: "flex-end",
+          flexWrap: "wrap"
+        }}
+      >
+        {/* FLOOR */}
+        <div style={{ ...filterWrap, position: "relative", minWidth: "140px" }}>
+          <label style={labelStyle}>Floor</label>
+          <button
+            onClick={() => {
+              setShowFloorPicker(!showFloorPicker);
+              setShowCapDropdown(false);
+            }}
+            style={{ ...inputStyle, width: "140px" }}
+          >
+            {localFloor ? `Floor ${localFloor}` : "All Floors"}
+          </button>
+
+          {showFloorPicker && (
+            <FloorPicker
+              selectedFloor={localFloor}
+              onSelectFloor={(n: number | null) => {
+                setLocalFloor(n);
+                setShowFloorPicker(false);
+              }}
+              onClose={() => setShowFloorPicker(false)}
+              availableFloors={availableFloors}
+            />
+          )}
+        </div>
+
+        {/* CAPACITY */}
+        <div style={{ ...filterWrap, position: "relative", minWidth: "150px" }}>
+          <label style={labelStyle}>Capacity</label>
+          <button
+            onClick={() => {
+              setShowCapDropdown(!showCapDropdown);
+              setShowFloorPicker(false);
+            }}
+            style={{ ...inputStyle, width: "150px" }}
+          >
+            {localCapacity}+ Seats ▼
+          </button>
+
+          {showCapDropdown && (
+            <div style={{ ...dropdownListStyle, width: "150px" }}>
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((c) => (
+                <div
+                  key={c}
+                  onClick={() => {
+                    setLocalCapacity(c);
+                    setShowCapDropdown(false);
+                  }}
+                  style={{ padding: "10px", cursor: "pointer" }}
+                >
+                  {c}+ Seats
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 🔥 ROOM LIST */}
+      {rooms.length === 0 ? (
+        <p style={{ color: "#6B7280" }}>No available rooms</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {rooms.map((room: any, i: number) => {
+            const ts = new Date(room.timestamp_iso);
+
+            return (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "20px",
+                  background: "white",
+                  borderRadius: "12px",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 700 }}>
+                    Room {room.room_id} — Floor {room.floor_id}
+                  </div>
+
+                  <div style={{ fontSize: "14px", color: "#6B7280" }}>
+                    {ts.toLocaleDateString()}{" "}
+                    {ts.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    })}{" "}
+                    | Capacity: {room.capacity}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    width: "24px",
+                    height: "24px",
+                    borderRadius: "50%",
+                    backgroundColor: "#16A34A"
+                  }}
+                />
+
+                <button
+                  onClick={() => handleBooking(room)}
+                  style={{
+                    padding: "8px 12px",
+                    background: "#2563EB",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px"
+                  }}
+                >
+                  Book
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
   return (
     <div style={{ display: "flex", flexDirection: "column", fontFamily: "Arial", minHeight: "100vh", background: "#F3F4F6" }}>
       <header style={{ width: "100%", padding: "18px 45px", background: "#111827", color: "white", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 1000, boxShadow: "0 4px 15px rgba(0,0,0,0.2)" }}>
@@ -788,6 +1021,7 @@ export default function App() {
         {page === "maps" && <InteractiveMapPage />}
         {page === "wellness" && <WellnessPage />}
         {page === "history" && <HistoryPage />}
+        {page === "booking" && <BookingPage />}
       </main>
     </div>
   );
