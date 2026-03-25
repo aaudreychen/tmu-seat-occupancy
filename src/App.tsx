@@ -821,7 +821,7 @@ const fetchData = async () => {
   const [showFloorPicker, setShowFloorPicker] = useState(false);
   const [showCapDropdown, setShowCapDropdown] = useState(false);
 
-  // 🔥 dynamic floors
+  //  dynamic floors
   const availableFloors = Array.from(
     new Set(
       data
@@ -864,7 +864,7 @@ const fetchData = async () => {
         Book a Room — {buildingMap[selectedBuildingForBooking]}
       </h1>
 
-      {/* 🔥 FILTER BAR */}
+      {/* FILTER BAR */}
       <div
         style={{
           display: "flex",
@@ -932,7 +932,7 @@ const fetchData = async () => {
         </div>
       </div>
 
-      {/* 🔥 ROOM LIST */}
+      {/*ROOM LIST */}
       {rooms.length === 0 ? (
         <p style={{ color: "#6B7280" }}>No available rooms</p>
       ) : (
