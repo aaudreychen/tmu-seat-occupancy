@@ -8,15 +8,15 @@ from datetime import datetime, timedelta
 import urllib.parse
 import pandas as pd
 from flask_compress import Compress
-
+    
 # ----------------------------------------------------
 # Setup & Configuration
 # ----------------------------------------------------
 load_dotenv()
 
 app = Flask(__name__)
-Compress(app)  # Enables Gzip compression for faster data travel
-CORS(app)      # Allows your Vite frontend to talk to this API
+Compress(app)
+CORS(app)
 
 MONGO_URI = os.getenv("MONGO_URI")
 
@@ -35,11 +35,10 @@ print("Connected to MongoDB Atlas")
 SKIP_COLLECTIONS = {"historical_logs", "room_occupancy", "OccupancyInfo"}
 
 def building_collections():
-    """Returns a list of all valid building collection names."""
     return [c for c in db.list_collection_names() if c not in SKIP_COLLECTIONS]
 
 # ----------------------------------------------------
-# Date Range (Used by Frontend Calendar)
+# Date Range
 # ----------------------------------------------------
 
 @app.route("/trends/date-range")
@@ -48,7 +47,6 @@ def trends_date_range():
     latest = None
 
     for cname in building_collections():
-        # Find earliest timestamp
         doc_min = db[cname].find_one(
             {"timestamp_iso": {"$exists": True}},
             {"timestamp_iso": 1},
@@ -59,7 +57,6 @@ def trends_date_range():
             if earliest is None or d < earliest:
                 earliest = d
 
-        # Find latest timestamp
         doc_max = db[cname].find_one(
             {"timestamp_iso": {"$exists": True}},
             {"timestamp_iso": 1},
@@ -70,13 +67,10 @@ def trends_date_range():
             if latest is None or d > latest:
                 latest = d
 
-    return jsonify({
-        "earliest": earliest,
-        "latest": latest
-    })
+    return jsonify({"earliest": earliest, "latest": latest})
 
 # ----------------------------------------------------
-# Historical Logs (Aggregated Trends)
+# Historical Logs
 # ----------------------------------------------------
 
 @app.route("/trends")
@@ -95,36 +89,14 @@ def trends():
         results = []
 
         pipeline = [
-            {
-                "$addFields": {
-                    "ts": {
-                        "$dateFromString": {
-                            "dateString": "$timestamp_iso"
-                        }
-                    }
-                }
-            },
-            {
-                "$match": {
-                    "ts": {
-                        "$gte": start_dt,
-                        "$lte": end_dt
-                    }
-                }
-            },
-            {
-                "$group": {
-                    "_id": {
-                        "$dateToString": {
-                            "format": "%Y-%m",
-                            "date": "$ts"
-                        }
-                    },
-                    "avg_occupancy": {"$avg": "$occupied"},
-                    "total_records": {"$sum": 1},
-                    "avg_duration_h": {"$avg": "$booking_duration"}
-                }
-            },
+            {"$addFields": {"ts": {"$dateFromString": {"dateString": "$timestamp_iso"}}}},
+            {"$match": {"ts": {"$gte": start_dt, "$lte": end_dt}}},
+            {"$group": {
+                "_id": {"$dateToString": {"format": "%Y-%m", "date": "$ts"}},
+                "avg_occupancy": {"$avg": "$occupied"},
+                "total_records": {"$sum": 1},
+                "avg_duration_h": {"$avg": "$booking_duration"}
+            }},
             {"$sort": {"_id": 1}}
         ]
 
@@ -145,7 +117,7 @@ def trends():
         return jsonify({"error": str(e)})
 
 # ----------------------------------------------------
-# Availability Endpoint (The Map & List Fix)
+# Availability Endpoint
 # ----------------------------------------------------
 
 @app.route("/availability/<building>")
@@ -155,7 +127,6 @@ def availability(building):
         time = request.args.get("time")
         floor = request.args.get("floor")
 
-        # Support "ALL" building request for the Interactive Map
         if building == "ALL":
             target_collections = building_collections()
         else:
@@ -172,18 +143,12 @@ def availability(building):
         results = []
         for col_name in target_collections:
             docs = list(db[col_name].find(query, {"_id": 0}))
-            
             for doc in docs:
                 ts = doc.get("timestamp_iso", "")
-                
-                # Filter by 30-minute interval if time is provided
                 if time and time not in ts:
                     continue
-                
-                # CRITICAL: Ensure the building name is attached for the Map's counter
                 if "building" not in doc:
                     doc["building"] = col_name
-                    
                 results.append(doc)
 
         return jsonify(results)
@@ -193,7 +158,7 @@ def availability(building):
         return jsonify({"error": str(e)})
 
 # ----------------------------------------------------
-# Room Insights (Historical Predictions)
+# Room Insights
 # ----------------------------------------------------
 
 @app.route("/room-insights/<building>")
@@ -213,21 +178,29 @@ def room_insights(building):
             return jsonify({})
 
         room_ids = [r.split("-")[-1] for r in rooms]
-        ninety_days_ago = datetime.now() - timedelta(days=90)
+
+        latest_doc = col.find_one(
+            {"timestamp_iso": {"$exists": True, "$ne": None}},
+            {"timestamp_iso": 1},
+            sort=[("timestamp_iso", -1)],
+        )
+        if latest_doc:
+            end_dt = datetime.strptime(latest_doc["timestamp_iso"][:10], "%Y-%m-%d")
+        else:
+            end_dt = datetime.utcnow()
+        start_dt = end_dt - timedelta(days=90)
+        cutoff = start_dt.strftime("%Y-%m-%dT00:00:00")
 
         docs = list(col.find(
-            {
-                "room_id": {"$in": room_ids},
-                "timestamp": {"$gte": ninety_days_ago}
-            },
-            {"_id": 0, "room_id": 1, "occupied": 1, "timestamp_iso": 1, "timestamp": 1}
+            {"room_id": {"$in": room_ids}, "timestamp_iso": {"$gte": cutoff}},
+            {"_id": 0, "room_id": 1, "occupied": 1, "timestamp_iso": 1}
         ))
 
         if not docs:
             return jsonify({})
 
         df = pd.DataFrame(docs)
-        df["ts"] = pd.to_datetime(df["timestamp"] if "timestamp" in df.columns else df["timestamp_iso"], errors="coerce")
+        df["ts"] = pd.to_datetime(df["timestamp_iso"], errors="coerce")
         df["occupied"] = pd.to_numeric(df["occupied"], errors="coerce")
         df = df.dropna(subset=["ts", "occupied"])
 
@@ -250,7 +223,7 @@ def room_insights(building):
                 continue
 
             pct = same_slot["occupied"].mean()
-            
+
             if pct < 0.2: label, color = "Usually empty", "#15803D"
             elif pct < 0.5: label, color = "Often available", "#65A30D"
             elif pct < 0.75: label, color = "Sometimes busy", "#D97706"
@@ -285,7 +258,6 @@ def health():
 def book_room():
     try:
         data = request.json
-
         building = data.get("building")
         room_id = data.get("room_id")
         timestamp = data.get("timestamp_iso")
@@ -293,30 +265,22 @@ def book_room():
         if not building or not room_id:
             return jsonify({"error": "Missing data"}), 400
 
-        # Mark room as occupied
         db[building].update_one(
-            {
-                "room_id": room_id,
-                "timestamp_iso": timestamp
-            },
-            {
-                "$set": {
-                    "occupied": 1,
-                    "booking_duration": 1  # example (1 hour)
-                }
-            }
+            {"room_id": room_id, "timestamp_iso": timestamp},
+            {"$set": {"occupied": 1, "booking_duration": 1}}
         )
 
         return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"error": str(e)})
+
 # ----------------------------------------------------
 # Execution
 # ----------------------------------------------------
 
 if __name__ == "__main__":
     app.run(
-        host="127.0.0.1",
-        port=5000,
-        debug=True
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 5000)),
+        debug=False
     )

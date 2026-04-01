@@ -1,5 +1,7 @@
-Flask
-Flask-Cors
-pandas
+flask
+flask-cors
 pymongo
 python-dotenv
+pandas
+flask-compress
+gunicorn
