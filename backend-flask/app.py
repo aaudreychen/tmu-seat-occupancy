@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import urllib.parse
 import pandas as pd
 from flask_compress import Compress
-    
+
 # ----------------------------------------------------
 # Setup & Configuration
 # ----------------------------------------------------
@@ -19,7 +19,6 @@ Compress(app)
 CORS(app)
 
 MONGO_URI = os.getenv("MONGO_URI")
-
 if not MONGO_URI:
     raise RuntimeError("MONGO_URI not set in .env file")
 
@@ -32,13 +31,39 @@ print("Connected to MongoDB Atlas")
 # Helper functions
 # ----------------------------------------------------
 
-SKIP_COLLECTIONS = {"historical_logs", "room_occupancy", "OccupancyInfo"}
+SKIP_COLLECTIONS = {
+    "historical_logs",
+    "room_occupancy",
+    "OccupancyInfo",
+    "occupancy_data",
+    "trends"
+}
 
 def building_collections():
+    """Returns only the valid building collection names."""
     return [c for c in db.list_collection_names() if c not in SKIP_COLLECTIONS]
 
+def parse_date_time_range(date_str=None, time_str=None):
+    """
+    Builds a MongoDB datetime range query using the indexed 'timestamp' field.
+    - If date and time are given: one 30-minute slot
+    - If only date is given: whole day
+    - If neither is given: no timestamp filter
+    """
+    if date_str and time_str:
+        start_dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+        end_dt = start_dt + timedelta(minutes=30)
+        return {"$gte": start_dt, "$lt": end_dt}
+
+    if date_str:
+        start_dt = datetime.strptime(date_str, "%Y-%m-%d")
+        end_dt = start_dt + timedelta(days=1)
+        return {"$gte": start_dt, "$lt": end_dt}
+
+    return None
+
 # ----------------------------------------------------
-# Date Range
+# Date Range (Used by Frontend Calendar)
 # ----------------------------------------------------
 
 @app.route("/trends/date-range")
@@ -47,30 +72,35 @@ def trends_date_range():
     latest = None
 
     for cname in building_collections():
+        # earliest timestamp
         doc_min = db[cname].find_one(
-            {"timestamp_iso": {"$exists": True}},
-            {"timestamp_iso": 1},
-            sort=[("timestamp_iso", 1)]
+            {"timestamp": {"$exists": True}},
+            {"timestamp": 1},
+            sort=[("timestamp", 1)]
         )
-        if doc_min:
-            d = doc_min["timestamp_iso"][:10]
+        if doc_min and doc_min.get("timestamp"):
+            d = doc_min["timestamp"].strftime("%Y-%m-%d")
             if earliest is None or d < earliest:
                 earliest = d
 
+        # latest timestamp
         doc_max = db[cname].find_one(
-            {"timestamp_iso": {"$exists": True}},
-            {"timestamp_iso": 1},
-            sort=[("timestamp_iso", -1)]
+            {"timestamp": {"$exists": True}},
+            {"timestamp": 1},
+            sort=[("timestamp", -1)]
         )
-        if doc_max:
-            d = doc_max["timestamp_iso"][:10]
+        if doc_max and doc_max.get("timestamp"):
+            d = doc_max["timestamp"].strftime("%Y-%m-%d")
             if latest is None or d > latest:
                 latest = d
 
-    return jsonify({"earliest": earliest, "latest": latest})
+    return jsonify({
+        "earliest": earliest,
+        "latest": latest
+    })
 
 # ----------------------------------------------------
-# Historical Logs
+# Historical Logs (Aggregated Trends)
 # ----------------------------------------------------
 
 @app.route("/trends")
@@ -80,23 +110,38 @@ def trends():
         end_date = request.args.get("end_date")
 
         if end_date:
-            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            # include full selected date
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
         else:
             end_dt = datetime.utcnow()
 
         start_dt = end_dt - timedelta(days=90)
+
         collections = [building] if building and building != "ALL" else building_collections()
         results = []
 
         pipeline = [
-            {"$addFields": {"ts": {"$dateFromString": {"dateString": "$timestamp_iso"}}}},
-            {"$match": {"ts": {"$gte": start_dt, "$lte": end_dt}}},
-            {"$group": {
-                "_id": {"$dateToString": {"format": "%Y-%m", "date": "$ts"}},
-                "avg_occupancy": {"$avg": "$occupied"},
-                "total_records": {"$sum": 1},
-                "avg_duration_h": {"$avg": "$booking_duration"}
-            }},
+            {
+                "$match": {
+                    "timestamp": {
+                        "$gte": start_dt,
+                        "$lt": end_dt
+                    }
+                }
+            },
+            {
+                "$group": {
+                    "_id": {
+                        "$dateToString": {
+                            "format": "%Y-%m",
+                            "date": "$timestamp"
+                        }
+                    },
+                    "avg_occupancy": {"$avg": "$occupied"},
+                    "total_records": {"$sum": 1},
+                    "avg_duration_h": {"$avg": "$booking_duration"}
+                }
+            },
             {"$sort": {"_id": 1}}
         ]
 
@@ -105,16 +150,16 @@ def trends():
             for row in data:
                 results.append({
                     "month": row["_id"],
-                    "avg_occupancy": round(row["avg_occupancy"], 4) if row.get("avg_occupancy") else None,
+                    "avg_occupancy": round(row["avg_occupancy"], 4) if row.get("avg_occupancy") is not None else None,
                     "total_records": int(row["total_records"]),
-                    "avg_duration_h": round(row["avg_duration_h"], 2) if row.get("avg_duration_h") else None
+                    "avg_duration_h": round(row["avg_duration_h"], 2) if row.get("avg_duration_h") is not None else None
                 })
 
         return jsonify(results)
 
     except Exception as e:
         print("Trends error:", e)
-        return jsonify({"error": str(e)})
+        return jsonify({"error": str(e)}), 500
 
 # ----------------------------------------------------
 # Availability Endpoint
@@ -127,6 +172,7 @@ def availability(building):
         time = request.args.get("time")
         floor = request.args.get("floor")
 
+        # support ALL building request for map
         if building == "ALL":
             target_collections = building_collections()
         else:
@@ -135,18 +181,38 @@ def availability(building):
             target_collections = [building]
 
         query = {}
-        if date:
-            query["timestamp_iso"] = {"$regex": f"^{date}"}
+
+        ts_range = parse_date_time_range(date, time)
+        if ts_range:
+            query["timestamp"] = ts_range
+
         if floor:
             query["floor_id"] = floor
 
+        projection = {
+            "_id": 0,
+            "timestamp_iso": 1,   # keep for frontend display
+            "timestamp": 1,
+            "academic_phase": 1,
+            "is_weekend": 1,
+            "occupied": 1,
+            "booking_duration": 1,
+            "building_id": 1,
+            "floor_id": 1,
+            "room_id": 1,
+            "full_room_id": 1,
+            "capacity": 1,
+            "sent": 1,
+            "validated": 1,
+            "validation_reason": 1
+        }
+
         results = []
+
         for col_name in target_collections:
-            docs = list(db[col_name].find(query, {"_id": 0}))
+            docs = list(db[col_name].find(query, projection))
+
             for doc in docs:
-                ts = doc.get("timestamp_iso", "")
-                if time and time not in ts:
-                    continue
                 if "building" not in doc:
                     doc["building"] = col_name
                 results.append(doc)
@@ -155,10 +221,10 @@ def availability(building):
 
     except Exception as e:
         print("Availability error:", e)
-        return jsonify({"error": str(e)})
+        return jsonify({"error": str(e)}), 500
 
 # ----------------------------------------------------
-# Room Insights
+# Room Insights (Historical Predictions)
 # ----------------------------------------------------
 
 @app.route("/room-insights/<building>")
@@ -178,33 +244,32 @@ def room_insights(building):
             return jsonify({})
 
         room_ids = [r.split("-")[-1] for r in rooms]
-
-        latest_doc = col.find_one(
-            {"timestamp_iso": {"$exists": True, "$ne": None}},
-            {"timestamp_iso": 1},
-            sort=[("timestamp_iso", -1)],
-        )
-        if latest_doc:
-            end_dt = datetime.strptime(latest_doc["timestamp_iso"][:10], "%Y-%m-%d")
-        else:
-            end_dt = datetime.utcnow()
-        start_dt = end_dt - timedelta(days=90)
-        cutoff = start_dt.strftime("%Y-%m-%dT00:00:00")
+        ninety_days_ago = datetime.now() - timedelta(days=90)
 
         docs = list(col.find(
-            {"room_id": {"$in": room_ids}, "timestamp_iso": {"$gte": cutoff}},
-            {"_id": 0, "room_id": 1, "occupied": 1, "timestamp_iso": 1}
+            {
+                "room_id": {"$in": room_ids},
+                "timestamp": {"$gte": ninety_days_ago}
+            },
+            {
+                "_id": 0,
+                "room_id": 1,
+                "occupied": 1,
+                "timestamp": 1,
+                "timestamp_iso": 1
+            }
         ))
 
         if not docs:
             return jsonify({})
 
         df = pd.DataFrame(docs)
-        df["ts"] = pd.to_datetime(df["timestamp_iso"], errors="coerce")
+        df["ts"] = pd.to_datetime(df["timestamp"], errors="coerce")
         df["occupied"] = pd.to_numeric(df["occupied"], errors="coerce")
         df = df.dropna(subset=["ts", "occupied"])
 
         result = {}
+
         for full_room in rooms:
             rid = full_room.split("-")[-1]
             grp = df[df["room_id"] == rid]
@@ -224,10 +289,14 @@ def room_insights(building):
 
             pct = same_slot["occupied"].mean()
 
-            if pct < 0.2: label, color = "Usually empty", "#15803D"
-            elif pct < 0.5: label, color = "Often available", "#65A30D"
-            elif pct < 0.75: label, color = "Sometimes busy", "#D97706"
-            else: label, color = "Usually busy", "#DC2626"
+            if pct < 0.2:
+                label, color = "Usually empty", "#15803D"
+            elif pct < 0.5:
+                label, color = "Often available", "#65A30D"
+            elif pct < 0.75:
+                label, color = "Sometimes busy", "#D97706"
+            else:
+                label, color = "Usually busy", "#DC2626"
 
             result[full_room] = {
                 "label": label,
@@ -240,7 +309,7 @@ def room_insights(building):
 
     except Exception as e:
         print("Room insights error:", e)
-        return jsonify({"error": str(e)})
+        return jsonify({"error": str(e)}), 500
 
 # ----------------------------------------------------
 # Health Check
@@ -254,25 +323,45 @@ def health():
         "collections": building_collections()
     })
 
+# ----------------------------------------------------
+# Booking Endpoint
+# ----------------------------------------------------
+
 @app.route("/book", methods=["POST"])
 def book_room():
     try:
-        data = request.json
+        data = request.json or {}
+
         building = data.get("building")
         room_id = data.get("room_id")
-        timestamp = data.get("timestamp_iso")
+        timestamp_iso = data.get("timestamp_iso")
 
-        if not building or not room_id:
+        if not building or not room_id or not timestamp_iso:
             return jsonify({"error": "Missing data"}), 400
 
-        db[building].update_one(
-            {"room_id": room_id, "timestamp_iso": timestamp},
-            {"$set": {"occupied": 1, "booking_duration": 1}}
+        ts = datetime.strptime(timestamp_iso, "%Y-%m-%d %H:%M")
+
+        result = db[building].update_one(
+            {
+                "room_id": room_id,
+                "timestamp": ts
+            },
+            {
+                "$set": {
+                    "occupied": 1,
+                    "booking_duration": 1
+                }
+            }
         )
 
+        if result.matched_count == 0:
+            return jsonify({"error": "No matching room/time found"}), 404
+
         return jsonify({"status": "success"})
+
     except Exception as e:
-        return jsonify({"error": str(e)})
+        print("Booking error:", e)
+        return jsonify({"error": str(e)}), 500
 
 # ----------------------------------------------------
 # Execution
@@ -280,7 +369,7 @@ def book_room():
 
 if __name__ == "__main__":
     app.run(
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", 5000)),
-        debug=False
+        host="127.0.0.1",
+        port=5000,
+        debug=True
     )
