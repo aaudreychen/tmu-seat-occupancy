@@ -336,18 +336,30 @@ def book_room():
 
         building = data.get("building")
         room_id = data.get("room_id")
+        floor_id = data.get("floor_id")
+        full_room_id = data.get("full_room_id")
         timestamp_iso = data.get("timestamp_iso")
 
-        if not building or not room_id or not timestamp_iso:
+        if not building or not timestamp_iso:
             return jsonify({"error": "Missing data"}), 400
 
         ts = datetime.strptime(timestamp_iso, "%Y-%m-%d %H:%M")
 
+        query = {
+            "timestamp": ts,
+            "occupied": 0
+        }
+
+        if full_room_id:
+            query["full_room_id"] = full_room_id
+        else:
+            if not room_id or not floor_id:
+                return jsonify({"error": "Missing room identifier"}), 400
+            query["room_id"] = room_id
+            query["floor_id"] = floor_id
+
         result = db[building].update_one(
-            {
-                "room_id": room_id,
-                "timestamp": ts
-            },
+            query,
             {
                 "$set": {
                     "occupied": 1,
@@ -366,7 +378,6 @@ def book_room():
     except Exception as e:
         print("Booking error:", e)
         return jsonify({"error": str(e)}), 500
-
 # ----------------------------------------------------
 # Execution
 # ----------------------------------------------------
