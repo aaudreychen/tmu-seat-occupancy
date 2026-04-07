@@ -197,6 +197,8 @@ def availability(building):
             "is_weekend": 1,
             "occupied": 1,
             "booking_duration": 1,
+            "is_booked": 1,
+            "booking_source": 1,
             "building_id": 1,
             "floor_id": 1,
             "room_id": 1,
@@ -349,7 +351,9 @@ def book_room():
             {
                 "$set": {
                     "occupied": 1,
-                    "booking_duration": 1
+                    "booking_duration": 1,
+                    "is_booked": True,
+                    "booking_source": "app"
                 }
             }
         )
