@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import urllib.parse
 import pandas as pd
 from flask_compress import Compress
+from sklearn.linear_model import LinearRegression
 
 # ----------------------------------------------------
 # Setup & Configuration
@@ -63,6 +64,114 @@ def parse_date_time_range(date_str=None, time_str=None):
     return None
 
 # ----------------------------------------------------
+# Linear Regression Training
+# ----------------------------------------------------
+
+room_model = None
+
+def train_linear_regression_model(max_docs_per_collection=3000, days_back=90):
+    all_docs = []
+
+    projection = {
+        "_id": 0,
+        "temperature_c": 1,
+        "co2_ppm": 1,
+        "humidity_ratio": 1,
+        "light_lux": 1,
+        "relative_humidity": 1,
+        "timestamp": 1,
+        "occupied": 1
+    }
+
+    recent_cutoff = datetime.now() - timedelta(days=days_back)
+
+    for cname in building_collections():
+        print(f"Loading training data from {cname}...")
+
+        docs = list(
+            db[cname].find(
+                {
+                    "timestamp": {"$gte": recent_cutoff},
+                    "occupied": {"$exists": True},
+                    "temperature_c": {"$exists": True},
+                    "co2_ppm": {"$exists": True},
+                    "humidity_ratio": {"$exists": True},
+                    "light_lux": {"$exists": True},
+                    "relative_humidity": {"$exists": True}
+                },
+                projection
+            )
+            .sort("timestamp", -1)
+            .limit(max_docs_per_collection)
+        )
+
+        print(f"  Loaded {len(docs)} rows from {cname}")
+        all_docs.extend(docs)
+
+    if not all_docs:
+        print("No training data found.")
+        return None
+
+    df = pd.DataFrame(all_docs)
+
+    if df.empty:
+        print("Training dataframe is empty.")
+        return None
+
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+
+    numeric_cols = [
+        "occupied",
+        "temperature_c",
+        "co2_ppm",
+        "humidity_ratio",
+        "light_lux",
+        "relative_humidity"
+    ]
+
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df["hour"] = df["timestamp"].dt.hour
+    df["day"] = df["timestamp"].dt.weekday
+
+    df = df.dropna(subset=[
+        "temperature_c",
+        "co2_ppm",
+        "humidity_ratio",
+        "light_lux",
+        "relative_humidity",
+        "hour",
+        "day",
+        "occupied"
+    ])
+
+    if df.empty:
+        print("No valid rows left after cleaning.")
+        return None
+
+    X = df[[
+        "temperature_c",
+        "co2_ppm",
+        "humidity_ratio",
+        "light_lux",
+        "relative_humidity",
+        "hour",
+        "day"
+    ]]
+    y = df["occupied"]
+
+    model = LinearRegression()
+    model.fit(X, y)
+
+    print(f"Linear regression model trained on {len(df)} rows.")
+    return model
+
+
+def predict_occupancy_score(model, feature_row):
+    pred = model.predict(feature_row)[0]
+    return max(0.0, min(1.0, float(pred)))
+# ----------------------------------------------------
 # Date Range (Used by Frontend Calendar)
 # ----------------------------------------------------
 
@@ -72,7 +181,6 @@ def trends_date_range():
     latest = None
 
     for cname in building_collections():
-        # earliest timestamp
         doc_min = db[cname].find_one(
             {"timestamp": {"$exists": True}},
             {"timestamp": 1},
@@ -83,7 +191,6 @@ def trends_date_range():
             if earliest is None or d < earliest:
                 earliest = d
 
-        # latest timestamp
         doc_max = db[cname].find_one(
             {"timestamp": {"$exists": True}},
             {"timestamp": 1},
@@ -110,7 +217,6 @@ def trends():
         end_date = request.args.get("end_date")
 
         if end_date:
-            # include full selected date
             end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
         else:
             end_dt = datetime.utcnow()
@@ -172,7 +278,6 @@ def availability(building):
         time = request.args.get("time")
         floor = request.args.get("floor")
 
-        # support ALL building request for map
         if building == "ALL":
             target_collections = building_collections()
         else:
@@ -191,7 +296,7 @@ def availability(building):
 
         projection = {
             "_id": 0,
-            "timestamp_iso": 1,   # keep for frontend display
+            "timestamp_iso": 1,
             "timestamp": 1,
             "academic_phase": 1,
             "is_weekend": 1,
@@ -226,12 +331,14 @@ def availability(building):
         return jsonify({"error": str(e)}), 500
 
 # ----------------------------------------------------
-# Room Insights (Historical Predictions)
+# Room Insights (Linear Regression Version)
 # ----------------------------------------------------
 
 @app.route("/room-insights/<building>")
 def room_insights(building):
     try:
+        global room_model
+
         if building not in db.list_collection_names():
             return jsonify({})
 
@@ -258,7 +365,11 @@ def room_insights(building):
                 "room_id": 1,
                 "occupied": 1,
                 "timestamp": 1,
-                "timestamp_iso": 1
+                "temperature_c": 1,
+                "co2_ppm": 1,
+                "humidity_ratio": 1,
+                "light_lux": 1,
+                "relative_humidity": 1
             }
         ))
 
@@ -266,8 +377,15 @@ def room_insights(building):
             return jsonify({})
 
         df = pd.DataFrame(docs)
+        if df.empty:
+            return jsonify({})
+
         df["ts"] = pd.to_datetime(df["timestamp"], errors="coerce")
         df["occupied"] = pd.to_numeric(df["occupied"], errors="coerce")
+
+        for col_name in ["temperature_c", "co2_ppm", "humidity_ratio", "light_lux", "relative_humidity"]:
+            df[col_name] = pd.to_numeric(df[col_name], errors="coerce")
+
         df = df.dropna(subset=["ts", "occupied"])
 
         result = {}
@@ -289,7 +407,29 @@ def room_insights(building):
                 result[full_room] = {"label": "No historical data", "pct": None}
                 continue
 
-            pct = same_slot["occupied"].mean()
+            pct = float(same_slot["occupied"].mean())
+
+            if room_model is not None:
+                env_slot = same_slot.dropna(subset=[
+                    "temperature_c",
+                    "co2_ppm",
+                    "humidity_ratio",
+                    "light_lux",
+                    "relative_humidity"
+                ])
+
+                if not env_slot.empty:
+                    feature_row = pd.DataFrame([{
+                        "temperature_c": env_slot["temperature_c"].mean(),
+                        "co2_ppm": env_slot["co2_ppm"].mean(),
+                        "humidity_ratio": env_slot["humidity_ratio"].mean(),
+                        "light_lux": env_slot["light_lux"].mean(),
+                        "relative_humidity": env_slot["relative_humidity"].mean(),
+                        "hour": hour,
+                        "day": day
+                    }])
+
+                    pct = predict_occupancy_score(room_model, feature_row)
 
             if pct < 0.2:
                 label, color = "Usually empty", "#15803D"
@@ -322,7 +462,8 @@ def health():
     return jsonify({
         "status": "healthy",
         "database": "OccupancyData",
-        "collections": building_collections()
+        "collections": building_collections(),
+        "model_loaded": room_model is not None
     })
 
 # ----------------------------------------------------
@@ -378,11 +519,21 @@ def book_room():
     except Exception as e:
         print("Booking error:", e)
         return jsonify({"error": str(e)}), 500
+
 # ----------------------------------------------------
 # Execution
 # ----------------------------------------------------
 
 if __name__ == "__main__":
+    try:
+        room_model = train_linear_regression_model(
+            max_docs_per_collection=3000,
+            days_back=90
+        )
+    except Exception as e:
+        print(f"Model training failed: {e}")
+        room_model = None
+
     app.run(
         host="0.0.0.0",
         port=int(os.getenv("PORT", 5000)),
