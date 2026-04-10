@@ -63,13 +63,38 @@ def parse_date_time_range(date_str=None, time_str=None):
 
     return None
 
+def projection_availability():
+    return {
+        "_id": 0,
+        "timestamp_iso": 1,
+        "timestamp": 1,
+        "academic_phase": 1,
+        "is_weekend": 1,
+        "occupied": 1,
+        "booking_duration": 1,
+        "is_booked": 1,
+        "booking_source": 1,
+        "building_id": 1,
+        "floor_id": 1,
+        "room_id": 1,
+        "full_room_id": 1,
+        "capacity": 1,
+        "sent": 1,
+        "validated": 1,
+        "validation_reason": 1
+    }
+
 # ----------------------------------------------------
 # Linear Regression Training
 # ----------------------------------------------------
 
 room_model = None
 
-def train_linear_regression_model(max_docs_per_collection=3000, days_back=90):
+def train_linear_regression_model(max_docs_per_collection=300, days_back=30):
+    """
+    Reduced training load to lower memory usage.
+    Uses timestamp sort so Mongo can benefit from timestamp-desc style reads.
+    """
     all_docs = []
 
     projection = {
@@ -167,10 +192,10 @@ def train_linear_regression_model(max_docs_per_collection=3000, days_back=90):
     print(f"Linear regression model trained on {len(df)} rows.")
     return model
 
-
 def predict_occupancy_score(model, feature_row):
     pred = model.predict(feature_row)[0]
     return max(0.0, min(1.0, float(pred)))
+
 # ----------------------------------------------------
 # Date Range (Used by Frontend Calendar)
 # ----------------------------------------------------
@@ -285,39 +310,50 @@ def availability(building):
                 return jsonify([])
             target_collections = [building]
 
-        query = {}
-
         ts_range = parse_date_time_range(date, time)
-        if ts_range:
-            query["timestamp"] = ts_range
-
-        if floor:
-            query["floor_id"] = floor
-
-        projection = {
-            "_id": 0,
-            "timestamp_iso": 1,
-            "timestamp": 1,
-            "academic_phase": 1,
-            "is_weekend": 1,
-            "occupied": 1,
-            "booking_duration": 1,
-            "is_booked": 1,
-            "booking_source": 1,
-            "building_id": 1,
-            "floor_id": 1,
-            "room_id": 1,
-            "full_room_id": 1,
-            "capacity": 1,
-            "sent": 1,
-            "validated": 1,
-            "validation_reason": 1
-        }
-
         results = []
+        projection = projection_availability()
 
         for col_name in target_collections:
-            docs = list(db[col_name].find(query, projection))
+            query = {}
+
+            # Match index usage better: timestamp is a major indexed filter
+            if ts_range:
+                query["timestamp"] = ts_range
+
+            if floor:
+                query["floor_id"] = floor
+
+            # If querying a whole day without a specific time, reduce payload by
+            # returning the latest record per room for that filtered range.
+            if date and not time:
+                pipeline = [
+                    {"$match": query},
+                    {"$sort": {"timestamp": -1}},
+                    {
+                        "$group": {
+                            "_id": {
+                                "$ifNull": ["$full_room_id", {"$concat": ["$floor_id", "-", "$room_id"]}]
+                            },
+                            "doc": {"$first": "$$ROOT"}
+                        }
+                    },
+                    {"$replaceRoot": {"newRoot": "$doc"}},
+                    {"$project": projection}
+                ]
+
+                docs = list(db[col_name].aggregate(pipeline))
+            else:
+                # For exact time slot queries, regular indexed find is fine.
+                cursor = db[col_name].find(query, projection)
+
+                # Optional hinting for floor+timestamp queries if needed later:
+                # if floor and ts_range:
+                #     cursor = cursor.hint("floor_timestamp_occupied_idx")
+                # elif ts_range:
+                #     cursor = cursor.hint("timestamp_idx")
+
+                docs = list(cursor)
 
             for doc in docs:
                 if "building" not in doc:
@@ -355,10 +391,14 @@ def room_insights(building):
         room_ids = [r.split("-")[-1] for r in rooms]
         ninety_days_ago = datetime.now() - timedelta(days=90)
 
+        # Uses room_timestamp_idx better: room_id + timestamp descending
         docs = list(col.find(
             {
                 "room_id": {"$in": room_ids},
-                "timestamp": {"$gte": ninety_days_ago}
+                "timestamp": {
+                    "$gte": ninety_days_ago,
+                    "$lt": datetime.now()
+                }
             },
             {
                 "_id": 0,
@@ -371,7 +411,7 @@ def room_insights(building):
                 "light_lux": 1,
                 "relative_humidity": 1
             }
-        ))
+        ).sort("timestamp", -1).limit(1500))
 
         if not docs:
             return jsonify({})
@@ -484,20 +524,32 @@ def book_room():
         if not building or not timestamp_iso:
             return jsonify({"error": "Missing data"}), 400
 
+        if building not in db.list_collection_names():
+            return jsonify({"error": "Invalid building"}), 400
+
         ts = datetime.strptime(timestamp_iso, "%Y-%m-%d %H:%M")
+
+        # Best match for your existing unique compound index:
+        # timestamp_1_floor_id_1_room_id_1
+        if full_room_id and (not room_id or not floor_id):
+            # Fallback parsing if frontend only sends full_room_id like "F3-R12"
+            try:
+                parts = full_room_id.split("-")
+                if len(parts) >= 2:
+                    floor_id = parts[0]
+                    room_id = parts[-1]
+            except Exception:
+                pass
+
+        if not room_id or not floor_id:
+            return jsonify({"error": "Missing room identifier"}), 400
 
         query = {
             "timestamp": ts,
+            "floor_id": floor_id,
+            "room_id": room_id,
             "occupied": 0
         }
-
-        if full_room_id:
-            query["full_room_id"] = full_room_id
-        else:
-            if not room_id or not floor_id:
-                return jsonify({"error": "Missing room identifier"}), 400
-            query["room_id"] = room_id
-            query["floor_id"] = floor_id
 
         result = db[building].update_one(
             query,
@@ -527,8 +579,8 @@ def book_room():
 if __name__ == "__main__":
     try:
         room_model = train_linear_regression_model(
-            max_docs_per_collection=3000,
-            days_back=90
+            max_docs_per_collection=300,
+            days_back=30
         )
     except Exception as e:
         print(f"Model training failed: {e}")
